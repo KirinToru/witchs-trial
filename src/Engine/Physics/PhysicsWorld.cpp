@@ -53,7 +53,59 @@ void PhysicsWorld::clear() {
 }
 //-------------------------------------------------------
 
-//------------[Update - Advance Physical Simulation by Step dt]-------------------
+//------------[Sweep Test - Raycast Moving AABB Against Scene Colliders]-------------------
+SweptHit PhysicsWorld::sweepTest(const AABB& box, sf::Vector2f displacement, const RigidBody* ignoreBody, bool checkOneWay) const {
+    SweptHit earliestHit;
+    earliestHit.hit = false;
+    earliestHit.toi = 1.0f;
+
+    AABB broadBox = box.getSweptBroadphase(displacement, 1.0f);
+
+    for (const auto& body : mBodies) {
+        if (body.get() == ignoreBody) continue;
+        if (body->isOneWay() && !checkOneWay) continue;
+
+        AABB targetBox = body->getWorldAABB();
+        if (!broadBox.intersects(targetBox)) continue;
+
+        SweptHit hit = sweepAABB(box, displacement, targetBox);
+        if (hit.hit && hit.toi < earliestHit.toi) {
+            earliestHit = hit;
+            earliestHit.body = body.get();
+        }
+    }
+
+    return earliestHit;
+}
+//-------------------------------------------------------
+
+//------------[Query AABB - Retrieve All Intersecting Bodies]-------------------
+std::vector<RigidBody*> PhysicsWorld::queryAABB(const AABB& aabb, const RigidBody* ignoreBody) const {
+    std::vector<RigidBody*> result;
+    for (const auto& body : mBodies) {
+        if (body.get() == ignoreBody) continue;
+        if (aabb.intersects(body->getWorldAABB())) {
+            result.push_back(body.get());
+        }
+    }
+    return result;
+}
+//-------------------------------------------------------
+
+//------------[Check Overlap - Fast Boolean Intersection Query]-------------------
+bool PhysicsWorld::checkOverlap(const AABB& aabb, const RigidBody* ignoreBody) const {
+    for (const auto& body : mBodies) {
+        if (body.get() == ignoreBody) continue;
+        if (body->isOneWay()) continue;
+        if (aabb.intersects(body->getWorldAABB())) {
+            return true;
+        }
+    }
+    return false;
+}
+//-------------------------------------------------------
+
+//------------[Update - Advance Physical Simulation with CCD]-------------------
 void PhysicsWorld::update(float dt) {
     if (dt <= 0.f) return;
 
@@ -81,6 +133,24 @@ void PhysicsWorld::update(float dt) {
     }
 
     for (const auto& body : mBodies) {
+        if (body->getType() == BodyType::Dynamic) {
+            sf::Vector2f disp = body->getVelocity() * dt;
+            float dispLen = std::hypot(disp.x, disp.y);
+            float bodyMinDim = std::min(body->getLocalAABB().getSize().x, body->getLocalAABB().getSize().y);
+
+            // Fast body CCD prevention
+            if (dispLen > bodyMinDim * 0.5f) {
+                SweptHit hit = sweepTest(body->getWorldAABB(), disp, body.get(), false);
+                if (hit.hit) {
+                    body->setPosition(body->getPosition() + disp * std::max(0.0f, hit.toi * 0.98f));
+                    float vn = body->getVelocity().x * hit.normal.x + body->getVelocity().y * hit.normal.y;
+                    if (vn < 0.f) {
+                        body->setVelocity(body->getVelocity() - (1.0f + body->getRestitution()) * vn * hit.normal);
+                    }
+                    continue;
+                }
+            }
+        }
         body->integrateVelocity(dt);
     }
 
@@ -144,7 +214,9 @@ void PhysicsWorld::renderDebug(sf::RenderWindow& window) const {
         rect.setPosition(aabb.min);
         rect.setFillColor(sf::Color(0, 0, 0, 0));
 
-        if (body->getType() == BodyType::Static) {
+        if (body->isOneWay()) {
+            rect.setOutlineColor(sf::Color(255, 165, 0)); // Orange for one-way
+        } else if (body->getType() == BodyType::Static) {
             rect.setOutlineColor(sf::Color::Blue);
         } else if (body->getType() == BodyType::Kinematic) {
             rect.setOutlineColor(sf::Color::Yellow);
@@ -167,6 +239,10 @@ void PhysicsWorld::broadphase(std::vector<std::pair<RigidBody*, RigidBody*>>& po
             RigidBody* b = mBodies[j].get();
 
             if (a->getType() != BodyType::Dynamic && b->getType() != BodyType::Dynamic) {
+                continue;
+            }
+
+            if (a->isOneWay() || b->isOneWay()) {
                 continue;
             }
 

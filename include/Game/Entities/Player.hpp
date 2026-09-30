@@ -4,11 +4,15 @@
 
 class Map;
 
+namespace Physics {
+  class PhysicsWorld;
+}
+
 class Player {
 public:
   Player();
 
-  void update(float dt, const Map &map);
+  void update(float dt, const Map &map, const Physics::PhysicsWorld &physicsWorld);
   void render(sf::RenderWindow &window, bool showHitbox = false);
   void reset(sf::Vector2f position);
   void applyForce(sf::Vector2f force);

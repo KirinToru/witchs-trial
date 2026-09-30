@@ -1,10 +1,12 @@
 #include <Game/World/Map.hpp>
+#include <Engine/Physics/PhysicsWorld.hpp>
 #include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 
+//------------[Constructor - Initialize Tile Shape and Map Font]-------------------
 Map::Map() {
   tileShape.setSize({TILE_SIZE, TILE_SIZE});
   tileShape.setFillColor(sf::Color::White);
@@ -15,8 +17,10 @@ Map::Map() {
     std::cerr << "Failed to load font for map text" << std::endl;
   }
 }
+//-------------------------------------------------------
 
-bool Map::loadFromFile(const std::string &filename) {
+//------------[Load From File - Parse TMX Map and Optionally Populate Physics Colliders]-------------------
+bool Map::loadFromFile(const std::string &filename, Physics::PhysicsWorld *physicsWorld) {
   std::ifstream file(filename);
   if (!file.is_open()) {
     std::cerr << "Failed to open map file: " << filename << std::endl;
@@ -41,8 +45,13 @@ bool Map::loadFromFile(const std::string &filename) {
     basePath = filename.substr(0, slashPos + 1);
   }
 
-  return parseTMX(content, basePath);
+  bool success = parseTMX(content, basePath);
+  if (success && physicsWorld) {
+    generateColliders(*physicsWorld);
+  }
+  return success;
 }
+//-------------------------------------------------------
 
 // Helper function to extract attribute value from XML tag
 std::string extractAttribute(const std::string &tag,
@@ -875,3 +884,113 @@ const Map::TilesetInfo *Map::getTilesetForId(int globalId) const {
   }
   return bestMatch;
 }
+
+//------------[Generate Colliders - Populate PhysicsWorld with Static Map Geometry]-------------------
+void Map::generateColliders(Physics::PhysicsWorld &physicsWorld) const {
+  for (const auto &layer : layers) {
+    int h = static_cast<int>(layer.grid.size());
+    if (h == 0) continue;
+    int w = static_cast<int>(layer.grid[0].size());
+
+    // 1. Solid Walls - Merged Horizontally
+    for (int y = 0; y < h; ++y) {
+      int startX = -1;
+      for (int x = 0; x < w; ++x) {
+        uint32_t rawId = layer.grid[y][x];
+        bool isWall = false;
+        if (rawId != 0) {
+          int id = static_cast<int>(rawId & TILE_MASK);
+          const TilesetInfo *ts = getTilesetForId(id);
+          if (ts && (ts->name == "ts_main" || ts->name == "MainTileset")) {
+            int localId = id - ts->firstgid;
+            int functionalId = localId % ts->columns;
+            if (functionalId == TileType::Wall) {
+              isWall = true;
+            }
+          }
+        }
+
+        if (isWall) {
+          if (startX == -1) startX = x;
+        } else {
+          if (startX != -1) {
+            float width = static_cast<float>(x - startX) * TILE_SIZE;
+            Physics::RigidBodyDef def;
+            def.type = Physics::BodyType::Static;
+            def.tag = Physics::ColliderTag::SolidWall;
+            def.isOneWay = false;
+            def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
+            def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
+            def.friction = 0.5f;
+            def.restitution = 0.0f;
+            physicsWorld.createBody(def);
+            startX = -1;
+          }
+        }
+      }
+      if (startX != -1) {
+        float width = static_cast<float>(w - startX) * TILE_SIZE;
+        Physics::RigidBodyDef def;
+        def.type = Physics::BodyType::Static;
+        def.tag = Physics::ColliderTag::SolidWall;
+        def.isOneWay = false;
+        def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
+        def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
+        def.friction = 0.5f;
+        def.restitution = 0.0f;
+        physicsWorld.createBody(def);
+      }
+    }
+
+    // 2. One-Way Platforms - Merged Horizontally
+    for (int y = 0; y < h; ++y) {
+      int startX = -1;
+      for (int x = 0; x < w; ++x) {
+        uint32_t rawId = layer.grid[y][x];
+        bool isPlatform = false;
+        if (rawId != 0) {
+          int id = static_cast<int>(rawId & TILE_MASK);
+          const TilesetInfo *ts = getTilesetForId(id);
+          if (ts && (ts->name == "ts_main" || ts->name == "MainTileset")) {
+            int localId = id - ts->firstgid;
+            int functionalId = localId % ts->columns;
+            if (functionalId == TileType::Platform) {
+              isPlatform = true;
+            }
+          }
+        }
+
+        if (isPlatform) {
+          if (startX == -1) startX = x;
+        } else {
+          if (startX != -1) {
+            float width = static_cast<float>(x - startX) * TILE_SIZE;
+            Physics::RigidBodyDef def;
+            def.type = Physics::BodyType::Static;
+            def.tag = Physics::ColliderTag::OneWayPlatform;
+            def.isOneWay = true;
+            def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
+            def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
+            def.friction = 0.5f;
+            def.restitution = 0.0f;
+            physicsWorld.createBody(def);
+            startX = -1;
+          }
+        }
+      }
+      if (startX != -1) {
+        float width = static_cast<float>(w - startX) * TILE_SIZE;
+        Physics::RigidBodyDef def;
+        def.type = Physics::BodyType::Static;
+        def.tag = Physics::ColliderTag::OneWayPlatform;
+        def.isOneWay = true;
+        def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
+        def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
+        def.friction = 0.5f;
+        def.restitution = 0.0f;
+        physicsWorld.createBody(def);
+      }
+    }
+  }
+}
+//-------------------------------------------------------

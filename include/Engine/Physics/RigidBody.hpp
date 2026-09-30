@@ -3,6 +3,7 @@
 #include <Engine/Physics/AABB.hpp>
 #include <SFML/System/Vector2.hpp>
 #include <cstdint>
+#include <algorithm>
 
 namespace Physics {
 
@@ -12,8 +13,17 @@ enum class BodyType : uint8_t {
     Dynamic
 };
 
+enum class ColliderTag : uint8_t {
+    SolidWall,
+    OneWayPlatform,
+    Hazard,
+    Generic
+};
+
 struct RigidBodyDef {
     BodyType type = BodyType::Dynamic;
+    ColliderTag tag = ColliderTag::Generic;
+    bool isOneWay = false;
     sf::Vector2f position{0.f, 0.f};
     sf::Vector2f velocity{0.f, 0.f};
     AABB localAABB{sf::Vector2f(-16.f, -16.f), sf::Vector2f(16.f, 16.f)};
@@ -28,6 +38,8 @@ public:
 //------------[Constructor - Initialize From Definition]-------------------
     explicit RigidBody(const RigidBodyDef& def = RigidBodyDef{})
         : mType(def.type),
+          mTag(def.tag),
+          mIsOneWay(def.isOneWay),
           mPosition(def.position),
           mVelocity(def.velocity),
           mForce(0.f, 0.f),
@@ -74,6 +86,30 @@ public:
     void setType(BodyType type) {
         mType = type;
         updateInverseMass();
+    }
+//-------------------------------------------------------
+
+//------------[Get Collider Tag - Query Gameplay Classification]-------------------
+    ColliderTag getTag() const {
+        return mTag;
+    }
+//-------------------------------------------------------
+
+//------------[Set Collider Tag - Update Gameplay Classification]-------------------
+    void setTag(ColliderTag tag) {
+        mTag = tag;
+    }
+//-------------------------------------------------------
+
+//------------[Is One Way - Query Platform Pass-Through Property]-------------------
+    bool isOneWay() const {
+        return mIsOneWay;
+    }
+//-------------------------------------------------------
+
+//------------[Set One Way - Toggle Platform Pass-Through Behavior]-------------------
+    void setOneWay(bool oneWay) {
+        mIsOneWay = oneWay;
     }
 //-------------------------------------------------------
 
@@ -196,6 +232,9 @@ private:
 //-------------------------------------------------------
 
     BodyType mType;
+    ColliderTag mTag;
+    bool mIsOneWay;
+
     sf::Vector2f mPosition;
     sf::Vector2f mVelocity;
     sf::Vector2f mForce;

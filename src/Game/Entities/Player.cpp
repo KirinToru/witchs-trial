@@ -1,5 +1,7 @@
 #include <Game/Entities/Player.hpp>
 #include <Game/World/Map.hpp>
+#include <Engine/Physics/PhysicsWorld.hpp>
+#include <Engine/Physics/SweptAABB.hpp>
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -62,8 +64,10 @@ Player::Player()
 }
 //-------------------------------------------------------
 
-//------------[Update - Kinematic Movement & Collision Resolution]-------------------
-void Player::update(float dt, const Map &map) {
+//------------[Update - Kinematic Movement with Swept AABB PhysicsWorld Interaction]-------------------
+void Player::update(float dt, const Map &map, const Physics::PhysicsWorld &physicsWorld) {
+  (void)map;
+
   if (dashCooldownTimer > 0.f)
     dashCooldownTimer -= dt;
 
@@ -178,14 +182,12 @@ void Player::update(float dt, const Map &map) {
     if (velocity.x < -currentMaxSpeed)
       velocity.x = -currentMaxSpeed;
 
-    sf::FloatRect bounds = shape.getGlobalBounds();
-    sf::FloatRect leftCheck = bounds;
-    leftCheck.position.x -= 2.f;
-    sf::FloatRect rightCheck = bounds;
-    rightCheck.position.x += 2.f;
+    Physics::AABB currentBox = Physics::AABB::fromPositionSize(shape.getPosition(), shape.getSize());
+    Physics::AABB leftCheck = currentBox.translated({-2.f, 0.f});
+    Physics::AABB rightCheck = currentBox.translated({2.f, 0.f});
 
-    bool touchingLeft = !map.checkCollision(leftCheck).empty();
-    bool touchingRight = !map.checkCollision(rightCheck).empty();
+    bool touchingLeft = physicsWorld.checkOverlap(leftCheck);
+    bool touchingRight = physicsWorld.checkOverlap(rightCheck);
 
     isWallSliding = false;
     wallDir = 0;
@@ -246,96 +248,79 @@ void Player::update(float dt, const Map &map) {
     velocity.y += currentGravity * dt;
   }
 
-  // --- X-Axis Movement & Collision ---
-  shape.move({velocity.x * dt, 0.f});
+  // --- X-Axis Swept AABB Continuous Collision Detection ---
+  sf::Vector2f dispX = {velocity.x * dt, 0.f};
+  Physics::AABB boxX = Physics::AABB::fromPositionSize(shape.getPosition(), shape.getSize());
+  Physics::SweptHit hitX = physicsWorld.sweepTest(boxX, dispX, nullptr, false);
 
-  std::vector<sf::FloatRect> walls = map.checkCollision(shape.getGlobalBounds());
-  for (const auto &wall : walls) {
-    sf::FloatRect playerBounds = shape.getGlobalBounds();
-    float overlapY = std::min(playerBounds.position.y + playerBounds.size.y,
-                              wall.position.y + wall.size.y) -
-                     std::max(playerBounds.position.y, wall.position.y);
-
-    if (overlapY < 5.f)
-      continue;
-
-    float playerCenter = shape.getPosition().x + shape.getSize().x / 2.f;
-    float wallCenter = wall.position.x + wall.size.x / 2.f;
-
-    if (velocity.x > 0.f) {
-      if (wallCenter > playerCenter) {
-        shape.setPosition({wall.position.x - shape.getSize().x, shape.getPosition().y});
-        velocity.x = 0.f;
-      }
-    } else if (velocity.x < 0.f) {
-      if (wallCenter < playerCenter) {
-        shape.setPosition({wall.position.x + wall.size.x, shape.getPosition().y});
-        velocity.x = 0.f;
-      }
-    }
+  if (hitX.hit) {
+    float safeToi = std::max(0.0f, hitX.toi - 0.001f);
+    shape.move({dispX.x * safeToi, 0.f});
+    velocity.x = 0.f;
+  } else {
+    shape.move(dispX);
   }
 
-  // --- Y-Axis Movement & Collision ---
+  // --- Y-Axis Swept AABB Continuous Collision Detection ---
   isGrounded = false;
   float prevBottom = shape.getPosition().y + shape.getSize().y;
-  shape.move({0.f, velocity.y * dt});
+  sf::Vector2f dispY = {0.f, velocity.y * dt};
+  Physics::AABB boxY = Physics::AABB::fromPositionSize(shape.getPosition(), shape.getSize());
+  Physics::SweptHit hitY = physicsWorld.sweepTest(boxY, dispY, nullptr, false);
 
-  walls = map.checkCollision(shape.getGlobalBounds());
-  for (const auto &wall : walls) {
-    sf::FloatRect playerBounds = shape.getGlobalBounds();
-    float overlapX = std::min(playerBounds.position.x + playerBounds.size.x,
-                              wall.position.x + wall.size.x) -
-                     std::max(playerBounds.position.x, wall.position.x);
-
-    if (overlapX < 2.f)
-      continue;
+  if (hitY.hit) {
+    float safeToi = std::max(0.0f, hitY.toi - 0.001f);
+    shape.move({0.f, dispY.y * safeToi});
 
     if (velocity.y > 0.f) {
-      if (prevBottom > wall.position.y + 15.f)
-        continue;
-
-      shape.setPosition({shape.getPosition().x, wall.position.y - shape.getSize().y});
-      velocity.y = 0.f;
       isGrounded = true;
+      velocity.y = 0.f;
     } else if (velocity.y < 0.f) {
+      // Corner Correction for upward jumps
       const float cornerMargin = 6.f;
-      sf::FloatRect nudgeLeft = playerBounds;
-      nudgeLeft.position.x -= cornerMargin;
-      if (map.checkCollision(nudgeLeft).empty()) {
+      Physics::AABB playerBounds = Physics::AABB::fromPositionSize(shape.getPosition(), shape.getSize());
+      Physics::AABB nudgeLeft = playerBounds.translated({-cornerMargin, 0.f});
+      if (!physicsWorld.checkOverlap(nudgeLeft)) {
         shape.move({-cornerMargin, 0.f});
       } else {
-        sf::FloatRect nudgeRight = playerBounds;
-        nudgeRight.position.x += cornerMargin;
-        if (map.checkCollision(nudgeRight).empty()) {
+        Physics::AABB nudgeRight = playerBounds.translated({cornerMargin, 0.f});
+        if (!physicsWorld.checkOverlap(nudgeRight)) {
           shape.move({cornerMargin, 0.f});
         } else {
-          shape.setPosition({shape.getPosition().x, wall.position.y + wall.size.y});
           velocity.y = 0.f;
         }
       }
     }
+  } else {
+    shape.move(dispY);
   }
 
-  // --- One-Way Platforms ---
+  // --- One-Way Platform Resolution ---
   bool dropPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S) ||
                      sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down);
 
   if (velocity.y >= 0.f && !dropPressed) {
-    std::vector<sf::FloatRect> platforms = map.checkPlatformCollision(shape.getGlobalBounds());
-    for (const auto &platform : platforms) {
-      sf::FloatRect playerBounds = shape.getGlobalBounds();
-      float overlapX = std::min(playerBounds.position.x + playerBounds.size.x,
-                                platform.position.x + platform.size.x) -
-                       std::max(playerBounds.position.x, platform.position.x);
+    float currentBottom = shape.getPosition().y + shape.getSize().y;
+    Physics::AABB platformProbe = Physics::AABB::fromPositionSize(
+        {shape.getPosition().x, prevBottom - 2.f},
+        {shape.getSize().x, (currentBottom - prevBottom) + 6.f});
 
-      if (overlapX < 4.f)
-        continue;
+    std::vector<Physics::RigidBody*> platforms = physicsWorld.queryAABB(platformProbe);
+    for (const auto* platform : platforms) {
+      if (platform->isOneWay()) {
+        Physics::AABB pBox = platform->getWorldAABB();
+        float overlapX = std::min(shape.getPosition().x + shape.getSize().x, pBox.max.x) -
+                         std::max(shape.getPosition().x, pBox.min.x);
 
-      if (prevBottom <= platform.position.y + 4.f) {
-        shape.setPosition({shape.getPosition().x, platform.position.y - shape.getSize().y});
-        velocity.y = 0.f;
-        isGrounded = true;
-        break;
+        if (overlapX < 4.f)
+          continue;
+
+        if (prevBottom <= pBox.min.y + 4.f && currentBottom >= pBox.min.y - 1.f) {
+          shape.setPosition({shape.getPosition().x, pBox.min.y - shape.getSize().y});
+          velocity.y = 0.f;
+          isGrounded = true;
+          break;
+        }
       }
     }
   }

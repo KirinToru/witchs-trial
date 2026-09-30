@@ -2,6 +2,7 @@
 
 #include <Engine/Physics/AABB.hpp>
 #include <Engine/Physics/RigidBody.hpp>
+#include <Engine/Physics/SweptAABB.hpp>
 #include <SFML/Graphics.hpp>
 #include <memory>
 #include <utility>
@@ -40,6 +41,10 @@ public:
     int getPositionIterations() const;
 
     const std::vector<std::unique_ptr<RigidBody>>& getBodies() const;
+
+    SweptHit sweepTest(const AABB& box, sf::Vector2f displacement, const RigidBody* ignoreBody = nullptr, bool checkOneWay = false) const;
+    std::vector<RigidBody*> queryAABB(const AABB& aabb, const RigidBody* ignoreBody = nullptr) const;
+    bool checkOverlap(const AABB& aabb, const RigidBody* ignoreBody = nullptr) const;
 
     void renderDebug(sf::RenderWindow& window) const;
 

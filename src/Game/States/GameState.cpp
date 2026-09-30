@@ -94,7 +94,8 @@ GameState::GameState(Game *game)
 
 //------------[Load Level - Load TMX Map and Center Camera]-------------------
 void GameState::loadLevel(const std::string &filename) {
-  if (mMap.loadFromFile(filename)) {
+  mPhysicsWorld.clear();
+  if (mMap.loadFromFile(filename, &mPhysicsWorld)) {
     mPlayer.reset(mMap.getStartPosition());
     sf::Vector2f playerPos = mPlayer.getPosition();
     sf::Vector2f viewSize = mCamera.getSize();
@@ -135,7 +136,7 @@ void GameState::fixedUpdate(sf::Time dt) {
   float dtSec = dt.asSeconds();
   if (!mGame->getConsole().isOpen()) {
     mPhysicsWorld.update(dtSec);
-    mPlayer.update(dtSec, mMap);
+    mPlayer.update(dtSec, mMap, mPhysicsWorld);
   }
 }
 //-------------------------------------------------------
