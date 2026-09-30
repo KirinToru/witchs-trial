@@ -28,6 +28,9 @@ GameState::GameState(Game *game)
 //------------[Load Level - Load TMX Map and Center Camera]-------------------
 void GameState::loadLevel(const std::string &filename) {
   mPhysicsWorld.clear();
+  mObjectManager.clearEnemies();
+  mHitEnemiesThisSwing.clear();
+
   if (mMap.loadFromFile(filename, &mPhysicsWorld)) {
     mPlayer.initPhysics(mPhysicsWorld);
     mPlayer.reset(mMap.getStartPosition());
@@ -35,6 +38,11 @@ void GameState::loadLevel(const std::string &filename) {
     sf::Vector2f viewSize = mCamera.getSize();
     float mapW = mMap.getWidth();
     float mapH = mMap.getHeight();
+
+    // Spawn Inquisitor Footmen on open terrain ahead of player start (avoiding column colliders)
+    sf::Vector2f startPos = mMap.getStartPosition();
+    mObjectManager.spawnInquisitor({startPos.x + 110.f, startPos.y - 10.f});
+    mObjectManager.spawnInquisitor({startPos.x + 400.f, startPos.y - 10.f});
 
     float camX = (mapW < viewSize.x)
                      ? mapW / 2.f
@@ -72,8 +80,53 @@ void GameState::fixedUpdate(sf::Time dt) {
   float dtSec = dt.asSeconds();
   mPhysicsWorld.update(dtSec);
   mPlayer.fixedUpdate(dtSec, mMap, mPhysicsWorld);
+  mObjectManager.updateEnemies(dtSec, mPlayer, mPhysicsWorld);
+  resolveCombatCollisions();
 }
 //-------------------------------------------------------
+
+//------------[Resolve Combat Collisions - Process Player & Enemy Hitbox Overlaps]-------------------
+void GameState::resolveCombatCollisions() {
+  const auto& playerHitbox = mPlayer.getAttackHitbox();
+  sf::Vector2f playerPos = mPlayer.getPosition();
+  auto& enemies = mObjectManager.getEnemies();
+
+  // 1. Reset hit tracking when player is not actively attacking
+  if (!playerHitbox.active) {
+    mHitEnemiesThisSwing.clear();
+  } else {
+    // Check Player Attack Hitbox vs Enemy Hurtboxes
+    for (auto& enemy : enemies) {
+      if (!enemy || enemy->isDead()) continue;
+
+      // Ensure each enemy is only hit once per attack swing
+      if (std::find(mHitEnemiesThisSwing.begin(), mHitEnemiesThisSwing.end(), enemy.get()) != mHitEnemiesThisSwing.end()) {
+        continue;
+      }
+
+      if (Combat::checkOverlap(playerHitbox, playerPos, enemy->getHurtbox(), enemy->getPosition())) {
+        enemy->takeDamage(playerHitbox.damage, playerHitbox.poiseDamage, playerHitbox.knockback);
+        mHitEnemiesThisSwing.push_back(enemy.get());
+      }
+    }
+  }
+
+  // 2. Check Enemy Attack Hitboxes vs Player Hurtbox
+  const auto& playerHurtbox = mPlayer.getHurtbox();
+  for (auto& enemy : enemies) {
+    if (!enemy || enemy->isDead()) continue;
+
+    const auto& enemyHitbox = enemy->getAttackHitbox();
+    if (enemyHitbox.active) {
+      if (Combat::checkOverlap(enemyHitbox, enemy->getPosition(), playerHurtbox, playerPos)) {
+        mPlayer.takeDamage(enemyHitbox.damage, enemyHitbox.knockback);
+      }
+    }
+  }
+}
+//-------------------------------------------------------
+
+
 
 //------------[Update - Step Camera Tracking & Telemetry]-------------------
 void GameState::update(sf::Time dt) {
@@ -81,9 +134,10 @@ void GameState::update(sf::Time dt) {
 
   sf::Vector2f vel = mPlayer.getVelocity();
   mHUD.setPlayerSpeed(std::abs(vel.x));
-  mHUD.setEntityCount(static_cast<int>(mPhysicsWorld.getBodies().size()));
+  mHUD.setEntityCount(static_cast<int>(mPhysicsWorld.getBodies().size() + mObjectManager.getEntityCount()));
   mHUD.setPlayerForm(mPlayer.getForm() == PlayerForm::Witch ? "Witch" : "Beast");
   mHUD.setPlayerState(mPlayer.getStateName());
+  mHUD.setHealth(mPlayer.getHealth(), mPlayer.getMaxHealth());
   mHUD.setStamina(mPlayer.getStamina(), mPlayer.getMaxStamina());
   mHUD.setMana(mPlayer.getMana(), mPlayer.getMaxMana());
   mHUD.setRage(mPlayer.getRage(), mPlayer.getMaxRage());
@@ -130,6 +184,7 @@ void GameState::render(sf::RenderWindow &window) {
 
   window.draw(mBackgroundSprite);
   mMap.render(window, mPlayer.getPosition(), mHUD.isHitboxVisible());
+  mObjectManager.renderEnemies(window, mHUD.isHitboxVisible());
   mPlayer.render(window, mHUD.isHitboxVisible());
 
   if (mHUD.isHitboxVisible()) {

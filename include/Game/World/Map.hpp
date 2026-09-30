@@ -93,6 +93,11 @@ private:
 
   sf::Font font;
   bool fontLoaded = false;
-
   const TilesetInfo *getTilesetForId(int globalId) const;
+
+//------------[Get Tileset Index For Id - Query Index of Containing Tileset]-------------------
+  int getTilesetIndexForId(int globalId) const;
+//-------------------------------------------------------
+
+  std::vector<sf::VertexArray> mTilesetBatches;
 };

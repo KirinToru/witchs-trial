@@ -291,12 +291,37 @@ public:
     void updateAnimation(float dt);
 //-------------------------------------------------------
 
+//------------[Get Health - Query Current Health Points]-------------------
+    float getHealth() const;
+//-------------------------------------------------------
+
+//------------[Get Max Health - Query Maximum Health Capacity]-------------------
+    float getMaxHealth() const;
+//-------------------------------------------------------
+
+//------------[Set Health - Update Health Value]-------------------
+    void setHealth(float hp);
+//-------------------------------------------------------
+
+//------------[Take Damage - Apply Damage with Invulnerability Frames and Knockback]-------------------
+    void takeDamage(float damage, sf::Vector2f knockback = {0.f, 0.f});
+//-------------------------------------------------------
+
+//------------[Heal - Restore Health Points]-------------------
+    void heal(float amount);
+//-------------------------------------------------------
+
+//------------[Is Dead - Check If Player Health Depleted]-------------------
+    bool isDead() const;
+//-------------------------------------------------------
+
 //------------[Get Stamina - Query Current Stamina]-------------------
     float getStamina() const;
 //-------------------------------------------------------
 
 //------------[Get Max Stamina - Query Maximum Stamina Capacity]-------------------
     float getMaxStamina() const;
+
 //-------------------------------------------------------
 
 //------------[Has Stamina - Check If Stamina Gauge Suffices]-------------------
@@ -385,6 +410,11 @@ private:
     std::unique_ptr<PlayerMeleeAttackState> mMeleeAttackState;
     std::unique_ptr<PlayerHeavyStrikeState> mHeavyStrikeState;
     PlayerState* mCurrentState{nullptr};
+
+    // Combat Health & Resources
+    float mHealth{100.f};
+    float mMaxHealth{100.f};
+    float mInvulnerableTimer{0.f};
 
     // Combat Resources (Witch: Stamina & Mana, Beast: Rage)
     float mStamina{100.f};

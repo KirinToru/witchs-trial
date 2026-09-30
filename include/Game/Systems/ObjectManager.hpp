@@ -2,25 +2,85 @@
 
 #include <SFML/Graphics.hpp>
 #include <Game/Entities/InteractiveProp2D.hpp>
+#include <Game/Entities/Enemy.hpp>
+#include <Game/Entities/InquisitorFootman.hpp>
 #include <vector>
 #include <memory>
 
+class Player;
+
+namespace Physics {
+class PhysicsWorld;
+}
+
 class ObjectManager {
 public:
+//------------[Constructor - Initialize Empty Manager]-------------------
   ObjectManager();
-  
+//-------------------------------------------------------
+
+//------------[Spawn Box - Create Rectangle Prop]-------------------
   void spawnBox(sf::Vector2f position);
+//-------------------------------------------------------
+
+//------------[Spawn Ball - Create Circle Prop]-------------------
   void spawnBall(sf::Vector2f position);
+//-------------------------------------------------------
+
+//------------[Spawn Triangle - Create Triangular Convex Prop]-------------------
   void spawnTriangle(sf::Vector2f position);
+//-------------------------------------------------------
+
+//------------[Spawn Star - Create Star Shaped Convex Prop]-------------------
   void spawnStar(sf::Vector2f position);
-  
+//-------------------------------------------------------
+
+//------------[Spawn Inquisitor - Instantiate Concrete Inquisitor Footman Enemy]-------------------
+  InquisitorFootman* spawnInquisitor(sf::Vector2f position);
+//-------------------------------------------------------
+
+//------------[Add Enemy - Register Dynamically Allocated Enemy]-------------------
+  void addEnemy(std::unique_ptr<Enemy> enemy);
+//-------------------------------------------------------
+
+//------------[Update Enemies - Step Enemy AI & Physics Loop (60Hz)]-------------------
+  void updateEnemies(float dt, const Player& player, const Physics::PhysicsWorld& physicsWorld);
+//-------------------------------------------------------
+
+//------------[Render Enemies - Draw All Active Enemies & Overhead Combat Gauges]-------------------
+  void renderEnemies(sf::RenderWindow& window, bool showHitbox = false);
+//-------------------------------------------------------
+
+//------------[Clear Enemies - Remove All Spawned Enemies]-------------------
+  void clearEnemies();
+//-------------------------------------------------------
+
+//------------[Clear - Remove All Spawned Props and Enemies]-------------------
   void clear();
+//-------------------------------------------------------
+
+//------------[Render - Draw All Active Props]-------------------
   void render(sf::RenderWindow& window);
-  
+//-------------------------------------------------------
+
+//------------[Get Props - Access Spawned Interactive Props Const]-------------------
   const std::vector<std::unique_ptr<InteractiveProp2D>>& getProps() const { return mSpawnedProps; }
-  size_t getEntityCount() const { return mSpawnedProps.size(); }
+//-------------------------------------------------------
+
+//------------[Get Enemies - Access Spawned Enemies Const]-------------------
+  const std::vector<std::unique_ptr<Enemy>>& getEnemies() const { return mEnemies; }
+//-------------------------------------------------------
+
+//------------[Get Enemies Mutable - Access Spawned Enemies]-------------------
+  std::vector<std::unique_ptr<Enemy>>& getEnemies() { return mEnemies; }
+//-------------------------------------------------------
+
+//------------[Get Entity Count - Query Total Managed Entity Count]-------------------
+  size_t getEntityCount() const { return mSpawnedProps.size() + mEnemies.size(); }
+//-------------------------------------------------------
 
 private:
   std::vector<std::unique_ptr<InteractiveProp2D>> mSpawnedProps;
   std::vector<std::unique_ptr<sf::Shape>> mSpawnedShapes;
+  std::vector<std::unique_ptr<Enemy>> mEnemies;
 };

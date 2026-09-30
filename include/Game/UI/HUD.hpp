@@ -22,6 +22,7 @@ public:
   void setFrameTime(float ms);
   void setPlayerForm(std::string_view form);
   void setPlayerState(std::string_view state);
+  void setHealth(float current, float max);
   void setStamina(float current, float max);
   void setMana(float current, float max);
   void setRage(float current, float max);
@@ -41,6 +42,8 @@ private:
   std::string mPlayerForm;
   std::string mPlayerState;
 
+  float mHealth{100.f};
+  float mMaxHealth{100.f};
   float mStamina{100.f};
   float mMaxStamina{100.f};
   float mMana{100.f};

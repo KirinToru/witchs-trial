@@ -90,13 +90,16 @@ void HUD::render(sf::RenderWindow& window) {
       window.draw(barText);
     };
 
+    // 1. Health Gauge (Universal HP Bar)
+    drawResourceBar(baseY, mHealth, mMaxHealth, sf::Color(220, 35, 35), "HP");
+
     if (mPlayerForm == "Witch") {
       // Witch Form: Stamina (Green) and Mana (Cyan/Blue)
-      drawResourceBar(baseY, mStamina, mMaxStamina, sf::Color(45, 195, 80), "STA");
-      drawResourceBar(baseY + spacing, mMana, mMaxMana, sf::Color(40, 140, 240), "MP");
+      drawResourceBar(baseY + spacing, mStamina, mMaxStamina, sf::Color(45, 195, 80), "STA");
+      drawResourceBar(baseY + spacing * 2.f, mMana, mMaxMana, sf::Color(40, 140, 240), "MP");
     } else {
-      // Beast Form: Rage Meter (Crimson)
-      drawResourceBar(baseY, mRage, mMaxRage, sf::Color(230, 45, 35), "RAGE");
+      // Beast Form: Rage Meter (Crimson/Orange)
+      drawResourceBar(baseY + spacing, mRage, mMaxRage, sf::Color(240, 90, 30), "RAGE");
     }
   }
 
@@ -141,6 +144,13 @@ void HUD::setPlayerForm(std::string_view form) {
 //------------[Set Player State - Update Displayed FSM State]-------------------
 void HUD::setPlayerState(std::string_view state) {
   mPlayerState = state;
+}
+//-------------------------------------------------------
+
+//------------[Set Health - Update Health Gauge Display]-------------------
+void HUD::setHealth(float current, float max) {
+  mHealth = current;
+  mMaxHealth = max;
 }
 //-------------------------------------------------------
 

@@ -8,6 +8,9 @@
 #include <SFML/Graphics.hpp>
 #include <memory>
 
+#include <Game/Systems/ObjectManager.hpp>
+#include <vector>
+
 class GameState : public State {
 public:
   GameState(Game *game);
@@ -26,9 +29,17 @@ public:
 private:
   void loadLevel(const std::string &filename);
 
+//------------[Resolve Combat Collisions - Process Player & Enemy Hitbox Overlaps]-------------------
+  void resolveCombatCollisions();
+//-------------------------------------------------------
+
+
+
   Player mPlayer;
   Map mMap;
   Physics::PhysicsWorld mPhysicsWorld;
+  ObjectManager mObjectManager;
+  std::vector<Enemy*> mHitEnemiesThisSwing;
 
   sf::View mCamera;
   sf::Texture mBackgroundTexture;

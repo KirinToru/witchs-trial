@@ -147,6 +147,15 @@ void Player::fixedUpdate(float dt, const Map& map, const Physics::PhysicsWorld& 
         mRage = std::max(0.f, mRage - mRageDecayRate * dt);
     }
 
+    // Invulnerability frames update
+    if (mInvulnerableTimer > 0.f) {
+        mInvulnerableTimer -= dt;
+        if (mInvulnerableTimer <= 0.f) {
+            mInvulnerableTimer = 0.f;
+            mHurtbox.invulnerable = false;
+        }
+    }
+
     // Sync defensive hurtbox with player dimensions
     mHurtbox.localBounds = Physics::AABB::fromPositionSize({0.f, 0.f}, shape.getSize());
 
@@ -205,6 +214,9 @@ void Player::reset(sf::Vector2f position) {
     isDashing = false;
     isWallSliding = false;
     currentMaxSpeed = moveSpeed;
+    mHealth = mMaxHealth;
+    mInvulnerableTimer = 0.f;
+    mHurtbox.invulnerable = false;
 
     if (mRigidBody) {
         mRigidBody->setPosition(shape.getPosition());
@@ -929,6 +941,51 @@ void Player::recalculatePhysicsProperties(const Physics::PhysicsWorld* physicsWo
         mRigidBody->setMass(mMass);
         mRigidBody->setLocalAABB(Physics::AABB::fromPositionSize({0.f, 0.f}, shape.getSize()));
     }
+}
+//-------------------------------------------------------
+
+//------------[Get Health - Query Current Health Points]-------------------
+float Player::getHealth() const {
+    return mHealth;
+}
+//-------------------------------------------------------
+
+//------------[Get Max Health - Query Maximum Health Capacity]-------------------
+float Player::getMaxHealth() const {
+    return mMaxHealth;
+}
+//-------------------------------------------------------
+
+//------------[Set Health - Update Health Value]-------------------
+void Player::setHealth(float hp) {
+    mHealth = std::clamp(hp, 0.f, mMaxHealth);
+}
+//-------------------------------------------------------
+
+//------------[Take Damage - Apply Damage with Invulnerability Frames and Knockback]-------------------
+void Player::takeDamage(float damage, sf::Vector2f knockback) {
+    if (mHurtbox.invulnerable || mInvulnerableTimer > 0.f || isDead()) {
+        return;
+    }
+
+    mHealth = std::max(0.f, mHealth - damage);
+    velocity += knockback;
+
+    // Grant 0.5s of I-frames after taking damage
+    mInvulnerableTimer = 0.5f;
+    mHurtbox.invulnerable = true;
+}
+//-------------------------------------------------------
+
+//------------[Heal - Restore Health Points]-------------------
+void Player::heal(float amount) {
+    mHealth = std::min(mMaxHealth, mHealth + amount);
+}
+//-------------------------------------------------------
+
+//------------[Is Dead - Check If Player Health Depleted]-------------------
+bool Player::isDead() const {
+    return mHealth <= 0.f;
 }
 //-------------------------------------------------------
 

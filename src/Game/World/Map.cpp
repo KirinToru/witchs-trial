@@ -11,8 +11,11 @@ Map::Map() {
   tileShape.setSize({TILE_SIZE, TILE_SIZE});
   tileShape.setFillColor(sf::Color::White);
 
-  // Load font for text objects
-  fontLoaded = font.openFromFile("assets/fonts/font.ttf");
+  // Load font for text objects (try local game font first, then system fallback)
+  fontLoaded = font.openFromFile("assets/fonts/trebuc.ttf");
+  if (!fontLoaded) {
+    fontLoaded = font.openFromFile("C:/Windows/Fonts/arial.ttf");
+  }
   if (!fontLoaded) {
     std::cerr << "Failed to load font for map text" << std::endl;
   }
@@ -437,6 +440,7 @@ void Map::parseObjectGroup(const std::string &content) {
   }
 }
 
+//------------[Render - Draw Visible Map Layers with Batched Vertex Arrays]-------------------
 void Map::render(sf::RenderWindow &window, sf::Vector2f playerPos,
                  bool showHitboxes) {
   // Get the current view bounds for culling
@@ -445,7 +449,6 @@ void Map::render(sf::RenderWindow &window, sf::Vector2f playerPos,
   sf::Vector2f viewSize = view.getSize();
 
   // Calculate visible tile range (with 1 tile margin for safety)
-  // Use first layer for bounds since all layers should have same dimensions
   int gridHeight = layers.empty() ? 0 : static_cast<int>(layers[0].grid.size());
   int gridWidth =
       gridHeight > 0 ? static_cast<int>(layers[0].grid[0].size()) : 0;
@@ -461,91 +464,126 @@ void Map::render(sf::RenderWindow &window, sf::Vector2f playerPos,
       gridHeight,
       static_cast<int>((viewCenter.y + viewSize.y / 2.f) / TILE_SIZE) + 2);
 
-  // Render all layers (back to front)
+  if (mTilesetBatches.size() != tilesets.size()) {
+    mTilesetBatches.resize(tilesets.size());
+    for (auto &va : mTilesetBatches) {
+      va.setPrimitiveType(sf::PrimitiveType::Triangles);
+    }
+  }
+
+  // Render all layers (back to front) with batched draw calls
   for (const auto &layer : layers) {
     const auto &grid = layer.grid;
     if (grid.empty())
       continue;
 
+    for (auto &va : mTilesetBatches) {
+      va.clear();
+    }
+
     for (int y = startY; y < endY; ++y) {
+      if (y < 0 || y >= static_cast<int>(grid.size())) continue;
+      const auto &row = grid[y];
+      int rowWidth = static_cast<int>(row.size());
+
       for (int x = startX; x < endX; ++x) {
-        if (y >= 0 && y < static_cast<int>(grid.size()) && x >= 0 &&
-            x < static_cast<int>(grid[y].size())) {
-          uint32_t rawId = grid[y][x];
+        if (x < 0 || x >= rowWidth) continue;
 
-          // Skip empty tiles
-          if (rawId == 0)
+        uint32_t rawId = row[x];
+        if (rawId == 0)
+          continue;
+
+        bool flipH = (rawId & FLIP_H);
+        bool flipV = (rawId & FLIP_V);
+        bool flipD = (rawId & FLIP_D);
+        int tileId = static_cast<int>(rawId & TILE_MASK);
+
+        int tsIdx = getTilesetIndexForId(tileId);
+        if (tsIdx < 0 || tsIdx >= static_cast<int>(tilesets.size()))
+          continue;
+
+        const auto &ts = tilesets[tsIdx];
+        if (ts.name == "ts_main" || ts.name == "MainTileset") {
+          if (!showHitboxes)
             continue;
-
-          // Extract flip flags
-          bool flipH = (rawId & FLIP_H);
-          bool flipV = (rawId & FLIP_V);
-          bool flipD = (rawId & FLIP_D);
-
-          // Get actual tile ID (mask out any flip flags)
-          int tileId = static_cast<int>(rawId & TILE_MASK);
-
-          const TilesetInfo *ts = getTilesetForId(tileId);
-          if (!ts)
-            continue;
-
-          // ts_main (collision block) should only render if showHitboxes is
-          // true.
-          if (ts->name == "ts_main" || ts->name == "MainTileset") {
-            if (!showHitboxes)
-              continue;
-          }
-
-          // Texture Rect logic based on this specific tileset
-          int localId = tileId - ts->firstgid;
-          int tileCol = localId % ts->columns;
-          int tileRow = localId / ts->columns;
-
-          // Calculate texture rect from tileset position
-          int texX = tileCol * ts->tilewidth;
-          int texY = tileRow * ts->tileheight;
-
-          sf::Sprite tileSprite(ts->texture);
-          tileSprite.setTextureRect(
-              sf::IntRect({texX, texY}, {ts->tilewidth, ts->tileheight}));
-
-          // Rotation and Flip Logic (Tiled to SFML mapping)
-          float rot = 0.f;
-          float sx = 1.f;
-          float sy = 1.f;
-
-          if (!flipD && !flipH && !flipV) {
-            rot = 0.f;
-          } else if (!flipD && flipH && !flipV) {
-            sx = -1.f;
-          } else if (!flipD && !flipH && flipV) {
-            sy = -1.f;
-          } else if (!flipD && flipH && flipV) {
-            rot = 180.f;
-          } else if (flipD && !flipH && !flipV) {
-            rot = 270.f;
-            sx = -1.f;
-          } else if (flipD && flipH && !flipV) {
-            rot = 90.f;
-          } else if (flipD && !flipH && flipV) {
-            rot = 270.f;
-          } else if (flipD && flipH && flipV) {
-            rot = 90.f;
-            sx = -1.f;
-          }
-
-          // Use center origin so rotation and scaling behave independently
-          tileSprite.setOrigin({TILE_SIZE / 2.f, TILE_SIZE / 2.f});
-          tileSprite.setScale({sx, sy});
-          tileSprite.setRotation(sf::degrees(rot));
-
-          // Position must shift by half a tile to compensate for center origin
-          tileSprite.setPosition(
-              {static_cast<float>(x) * TILE_SIZE + TILE_SIZE / 2.f,
-               static_cast<float>(y) * TILE_SIZE + TILE_SIZE / 2.f});
-
-          window.draw(tileSprite);
         }
+
+        int localId = tileId - ts.firstgid;
+        int tileCol = localId % ts.columns;
+        int tileRow = localId / ts.columns;
+
+        int texX = tileCol * ts.tilewidth;
+        int texY = tileRow * ts.tileheight;
+
+        float rot = 0.f;
+        float sx = 1.f;
+        float sy = 1.f;
+
+        if (!flipD && !flipH && !flipV) {
+          rot = 0.f;
+        } else if (!flipD && flipH && !flipV) {
+          sx = -1.f;
+        } else if (!flipD && !flipH && flipV) {
+          sy = -1.f;
+        } else if (!flipD && flipH && flipV) {
+          rot = 180.f;
+        } else if (flipD && !flipH && !flipV) {
+          rot = 270.f;
+          sx = -1.f;
+        } else if (flipD && flipH && !flipV) {
+          rot = 90.f;
+        } else if (flipD && !flipH && flipV) {
+          rot = 270.f;
+        } else if (flipD && flipH && flipV) {
+          rot = 90.f;
+          sx = -1.f;
+        }
+
+        float cx = static_cast<float>(x) * TILE_SIZE + TILE_SIZE / 2.f;
+        float cy = static_cast<float>(y) * TILE_SIZE + TILE_SIZE / 2.f;
+        float halfW = TILE_SIZE / 2.f;
+        float halfH = TILE_SIZE / 2.f;
+
+        sf::Vector2f p0{-halfW * sx, -halfH * sy};
+        sf::Vector2f p1{ halfW * sx, -halfH * sy};
+        sf::Vector2f p2{ halfW * sx,  halfH * sy};
+        sf::Vector2f p3{-halfW * sx,  halfH * sy};
+
+        sf::Vector2f v0, v1, v2, v3;
+        if (rot == 0.f) {
+          v0 = {p0.x + cx, p0.y + cy};
+          v1 = {p1.x + cx, p1.y + cy};
+          v2 = {p2.x + cx, p2.y + cy};
+          v3 = {p3.x + cx, p3.y + cy};
+        } else {
+          float rad = rot * 0.0174532925f;
+          float cosA = std::cos(rad);
+          float sinA = std::sin(rad);
+          v0 = {p0.x * cosA - p0.y * sinA + cx, p0.x * sinA + p0.y * cosA + cy};
+          v1 = {p1.x * cosA - p1.y * sinA + cx, p1.x * sinA + p1.y * cosA + cy};
+          v2 = {p2.x * cosA - p2.y * sinA + cx, p2.x * sinA + p2.y * cosA + cy};
+          v3 = {p3.x * cosA - p3.y * sinA + cx, p3.x * sinA + p3.y * cosA + cy};
+        }
+
+        float u0 = static_cast<float>(texX);
+        float v0_coord = static_cast<float>(texY);
+        float u1 = static_cast<float>(texX + ts.tilewidth);
+        float v1_coord = static_cast<float>(texY + ts.tileheight);
+
+        auto &batch = mTilesetBatches[tsIdx];
+        batch.append(sf::Vertex{v0, sf::Color::White, {u0, v0_coord}});
+        batch.append(sf::Vertex{v1, sf::Color::White, {u1, v0_coord}});
+        batch.append(sf::Vertex{v2, sf::Color::White, {u1, v1_coord}});
+
+        batch.append(sf::Vertex{v0, sf::Color::White, {u0, v0_coord}});
+        batch.append(sf::Vertex{v2, sf::Color::White, {u1, v1_coord}});
+        batch.append(sf::Vertex{v3, sf::Color::White, {u0, v1_coord}});
+      }
+    }
+
+    for (size_t i = 0; i < mTilesetBatches.size(); ++i) {
+      if (mTilesetBatches[i].getVertexCount() > 0) {
+        window.draw(mTilesetBatches[i], &tilesets[i].texture);
       }
     }
   }
@@ -869,6 +907,26 @@ bool Map::checkSpikeCollision(const sf::FloatRect &bounds) const {
   return false;
 }
 
+//------------[Get Tileset Index For Id - Query Index of Containing Tileset]-------------------
+int Map::getTilesetIndexForId(int globalId) const {
+  if (globalId < 0 || tilesets.empty())
+    return -1;
+
+  int bestIndex = -1;
+  int bestFirstGid = -1;
+  for (size_t i = 0; i < tilesets.size(); ++i) {
+    if (globalId >= tilesets[i].firstgid) {
+      if (bestIndex == -1 || tilesets[i].firstgid > bestFirstGid) {
+        bestIndex = static_cast<int>(i);
+        bestFirstGid = tilesets[i].firstgid;
+      }
+    }
+  }
+  return bestIndex;
+}
+//-------------------------------------------------------
+
+//------------[Get Tileset For Id - Query Pointer to Containing Tileset]-------------------
 const Map::TilesetInfo *Map::getTilesetForId(int globalId) const {
   if (globalId < 0 || tilesets.empty())
     return nullptr;

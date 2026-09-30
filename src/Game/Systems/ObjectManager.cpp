@@ -105,10 +105,54 @@ void ObjectManager::spawnStar(sf::Vector2f position) {
 }
 //-------------------------------------------------------
 
-//------------[Clear - Remove All Spawned Props]-------------------
+//------------[Spawn Inquisitor - Instantiate Concrete Inquisitor Footman Enemy]-------------------
+InquisitorFootman* ObjectManager::spawnInquisitor(sf::Vector2f position) {
+  auto footman = std::make_unique<InquisitorFootman>(position);
+  InquisitorFootman* ptr = footman.get();
+  mEnemies.push_back(std::move(footman));
+  return ptr;
+}
+//-------------------------------------------------------
+
+//------------[Add Enemy - Register Dynamically Allocated Enemy]-------------------
+void ObjectManager::addEnemy(std::unique_ptr<Enemy> enemy) {
+  if (enemy) {
+    mEnemies.push_back(std::move(enemy));
+  }
+}
+//-------------------------------------------------------
+
+//------------[Update Enemies - Step Enemy AI & Physics Loop (60Hz)]-------------------
+void ObjectManager::updateEnemies(float dt, const Player& player, const Physics::PhysicsWorld& physicsWorld) {
+  for (auto& enemy : mEnemies) {
+    if (enemy) {
+      enemy->fixedUpdate(dt, player, physicsWorld);
+    }
+  }
+}
+//-------------------------------------------------------
+
+//------------[Render Enemies - Draw All Active Enemies & Overhead Combat Gauges]-------------------
+void ObjectManager::renderEnemies(sf::RenderWindow& window, bool showHitbox) {
+  for (auto& enemy : mEnemies) {
+    if (enemy) {
+      enemy->render(window, showHitbox);
+    }
+  }
+}
+//-------------------------------------------------------
+
+//------------[Clear Enemies - Remove All Spawned Enemies]-------------------
+void ObjectManager::clearEnemies() {
+  mEnemies.clear();
+}
+//-------------------------------------------------------
+
+//------------[Clear - Remove All Spawned Props and Enemies]-------------------
 void ObjectManager::clear() {
   mSpawnedProps.clear();
   mSpawnedShapes.clear();
+  mEnemies.clear();
 }
 //-------------------------------------------------------
 
@@ -121,3 +165,4 @@ void ObjectManager::render(sf::RenderWindow& window) {
   }
 }
 //-------------------------------------------------------
+

@@ -8,7 +8,9 @@ const sf::Time Game::TimePerFrame = sf::seconds(1.f / 60.f);
 
 //------------[Constructor - Initialize Window, Display Settings, and Initial State]-------------------
 Game::Game() : mWindow(sf::VideoMode({1280, 720}), "Witch's Trial") {
-  mWindow.setFramerateLimit(60);
+  // Use VSync for hardware-synchronized smooth presentation.
+  // Never enable both setFramerateLimit and setVerticalSyncEnabled(true) simultaneously,
+  // as conflicting software timers cause missed VSync intervals that drop framerates to ~45 FPS.
   mWindow.setVerticalSyncEnabled(true);
   
   mStates.push_back(std::make_unique<MenuState>(this));
