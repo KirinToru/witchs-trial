@@ -17,18 +17,25 @@ public:
   void popState();
   void changeState(std::unique_ptr<State> state);
 
-  // Clear all states and push a new one (e.g. Restart/Menu)
   void clearStatesAndPush(std::unique_ptr<State> state);
 
+//------------[Get Window - Access Render Window]-------------------
   const sf::RenderWindow &getWindow() const { return mWindow; }
+//-------------------------------------------------------
+
+//------------[Get Window Mode - Access Current Display Mode]-------------------
   int getWindowMode() const { return mWindowMode; }
+//-------------------------------------------------------
 
   void cycleWindowMode();
   
+//------------[Get Console - Access DevConsole Instance]-------------------
   DevConsole& getConsole() { return mConsole; }
+//-------------------------------------------------------
 
 private:
   void processEvents();
+  void fixedUpdate(sf::Time dt);
   void update(sf::Time dt);
   void render();
 
@@ -45,12 +52,11 @@ private:
 
   int mWindowMode = 0; // 0=windowed, 1=maximized, 2=fullscreen
 
-  // Pending State Changes
   enum class Action {
     Push,
     Pop,
     Change,
-    ClearAndPush // Changes stack to [NewState]
+    ClearAndPush
   };
 
   struct PendingChange {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Engine/States/State.hpp>
+#include <Engine/Physics/PhysicsWorld.hpp>
 #include <Game/Entities/Player.hpp>
 #include <Game/World/Map.hpp>
 #include <Game/UI/HUD.hpp>
@@ -12,14 +13,22 @@ public:
   GameState(Game *game);
 
   void handleInput(sf::Event &event) override;
+  void fixedUpdate(sf::Time dt) override;
   void update(sf::Time dt) override;
   void render(sf::RenderWindow &window) override;
+
+//------------[Get Physics World - Access Core Custom Physics Simulation]-------------------
+  Physics::PhysicsWorld& getPhysicsWorld() {
+    return mPhysicsWorld;
+  }
+//-------------------------------------------------------
 
 private:
   void loadLevel(const std::string &filename);
 
   Player mPlayer;
   Map mMap;
+  Physics::PhysicsWorld mPhysicsWorld;
 
   sf::View mCamera;
   sf::Texture mBackgroundTexture;

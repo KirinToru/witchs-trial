@@ -19,6 +19,8 @@ GameState::GameState(Game *game)
   mBackgroundTexture.setRepeated(true);
   mBackgroundSprite.setTexture(mBackgroundTexture);
 
+  mPhysicsWorld.setGravity({0.f, 980.f});
+
   loadLevel("assets/maps/test.tmx");
 
   mGame->getConsole().setCommandCallback([this](const std::string &commandLine) {
@@ -26,7 +28,15 @@ GameState::GameState(Game *game)
     std::string cmd;
     iss >> cmd;
 
-    if (cmd == "autojump") {
+    if (cmd == "gravity") {
+      float gx, gy;
+      if (iss >> gx >> gy) {
+        mPhysicsWorld.setGravity({gx, gy});
+        mGame->getConsole().addLog("Gravity set to " + std::to_string(gx) + ", " + std::to_string(gy));
+      } else {
+        mGame->getConsole().addLog("Usage: gravity <x> <y>");
+      }
+    } else if (cmd == "autojump") {
       int val;
       if (iss >> val) {
         mPlayer.setAutoJump(val != 0);
@@ -69,6 +79,7 @@ GameState::GameState(Game *game)
       mGame->getConsole().addLog("Available commands:");
       mGame->getConsole().addLog("  help           - Show this help message");
       mGame->getConsole().addLog("  clear          - Clear the console history");
+      mGame->getConsole().addLog("  gravity <x> <y>- Set physics gravity vector");
       mGame->getConsole().addLog("  autojump <0|1> - Toggle auto-bunnyhop");
       mGame->getConsole().addLog("  info <0|1>     - Toggle telemetry HUD overlay");
       mGame->getConsole().addLog("  hitbox <0|1>   - Toggle hitbox debug rendering");
@@ -119,17 +130,23 @@ void GameState::handleInput(sf::Event &event) {
 }
 //-------------------------------------------------------
 
-//------------[Update - Step Player Physics & Camera Tracking]-------------------
+//------------[Fixed Update - Step Custom Physics & Deterministic Movement (60Hz)]-------------------
+void GameState::fixedUpdate(sf::Time dt) {
+  float dtSec = dt.asSeconds();
+  if (!mGame->getConsole().isOpen()) {
+    mPhysicsWorld.update(dtSec);
+    mPlayer.update(dtSec, mMap);
+  }
+}
+//-------------------------------------------------------
+
+//------------[Update - Step Camera Tracking & Telemetry]-------------------
 void GameState::update(sf::Time dt) {
   float dtSec = dt.asSeconds();
 
-  if (!mGame->getConsole().isOpen()) {
-    mPlayer.update(dtSec, mMap);
-  }
-
   sf::Vector2f vel = mPlayer.getVelocity();
   mHUD.setPlayerSpeed(std::abs(vel.x));
-  mHUD.setEntityCount(1);
+  mHUD.setEntityCount(static_cast<int>(mPhysicsWorld.getBodies().size()) + 1);
   mHUD.update(dt);
 
   sf::Vector2f playerPos = mPlayer.getPosition();
@@ -152,7 +169,7 @@ void GameState::update(sf::Time dt) {
 }
 //-------------------------------------------------------
 
-//------------[Render - Draw World, Map, Player, and HUD]-------------------
+//------------[Render - Draw World, Map, Player, Physics Debug, and HUD]-------------------
 void GameState::render(sf::RenderWindow &window) {
   window.setView(mCamera);
 
@@ -174,6 +191,10 @@ void GameState::render(sf::RenderWindow &window) {
   window.draw(mBackgroundSprite);
   mMap.render(window, mPlayer.getPosition(), mHUD.isHitboxVisible());
   mPlayer.render(window, mHUD.isHitboxVisible());
+
+  if (mHUD.isHitboxVisible()) {
+    mPhysicsWorld.renderDebug(window);
+  }
 
   mHUD.render(window);
 }

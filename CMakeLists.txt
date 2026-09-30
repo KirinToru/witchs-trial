@@ -37,6 +37,7 @@ set(SOURCES
     "src/Game/Systems/MouseInteraction.cpp"
     "src/Game/Systems/WindSystem.cpp"
     "src/Game/Systems/ObjectManager.cpp"
+    "src/Engine/Physics/PhysicsWorld.cpp"
 )
 add_executable(WitchsTrial ${SOURCES})
 
