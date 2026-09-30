@@ -29,6 +29,8 @@ Player::Player()
     mAirborneState = std::make_unique<PlayerAirborneState>();
     mDashState = std::make_unique<PlayerDashState>();
     mPounceState = std::make_unique<PlayerPounceState>();
+    mMeleeAttackState = std::make_unique<PlayerMeleeAttackState>();
+    mHeavyStrikeState = std::make_unique<PlayerHeavyStrikeState>();
 
     // Set initial active state
     mCurrentState = mIdleState.get();
@@ -132,6 +134,22 @@ void Player::fixedUpdate(float dt, const Map& map, const Physics::PhysicsWorld& 
         mCurrentState->fixedUpdate(*this, dt, map, physicsWorld);
     }
 
+    // Combat resource updates
+    if (mStaminaRegenDelayTimer > 0.f) {
+        mStaminaRegenDelayTimer -= dt;
+    } else if (mStamina < mMaxStamina) {
+        mStamina = std::min(mMaxStamina, mStamina + mStaminaRegenRate * dt);
+    }
+
+    if (mRageDecayDelayTimer > 0.f) {
+        mRageDecayDelayTimer -= dt;
+    } else if (mRage > 0.f) {
+        mRage = std::max(0.f, mRage - mRageDecayRate * dt);
+    }
+
+    // Sync defensive hurtbox with player dimensions
+    mHurtbox.localBounds = Physics::AABB::fromPositionSize({0.f, 0.f}, shape.getSize());
+
     // Synchronize PhysicsWorld RigidBody with updated kinematic state
     if (mRigidBody) {
         mRigidBody->setPosition(shape.getPosition());
@@ -148,16 +166,32 @@ void Player::render(sf::RenderWindow& window, bool showHitbox) {
     window.draw(sprite);
 
     if (showHitbox) {
-        sf::RectangleShape hitboxVis = shape;
-        if (mForm == PlayerForm::Witch) {
-            hitboxVis.setFillColor(sf::Color(0, 255, 0, 80));
-            hitboxVis.setOutlineColor(sf::Color::Green);
+        // 1. Draw Player Defensive Hurtbox
+        sf::RectangleShape hurtboxVis = shape;
+        if (mHurtbox.invulnerable) {
+            hurtboxVis.setFillColor(sf::Color(255, 255, 255, 120)); // I-frames white flash
+            hurtboxVis.setOutlineColor(sf::Color::White);
+        } else if (mForm == PlayerForm::Witch) {
+            hurtboxVis.setFillColor(sf::Color(0, 255, 0, 80));
+            hurtboxVis.setOutlineColor(sf::Color::Green);
         } else {
-            hitboxVis.setFillColor(sf::Color(255, 60, 60, 90));
-            hitboxVis.setOutlineColor(sf::Color::Red);
+            hurtboxVis.setFillColor(sf::Color(255, 60, 60, 90));
+            hurtboxVis.setOutlineColor(sf::Color::Red);
         }
-        hitboxVis.setOutlineThickness(1.f);
-        window.draw(hitboxVis);
+        hurtboxVis.setOutlineThickness(1.f);
+        window.draw(hurtboxVis);
+
+        // 2. Draw Offensive Attack Hitbox if active
+        if (mAttackHitbox.active) {
+            Physics::AABB worldHitbox = mAttackHitbox.getWorldAABB(shape.getPosition());
+            sf::RectangleShape attackVis;
+            attackVis.setPosition(worldHitbox.min);
+            attackVis.setSize(worldHitbox.getSize());
+            attackVis.setFillColor(sf::Color(255, 40, 40, 130));
+            attackVis.setOutlineColor(sf::Color(255, 200, 50));
+            attackVis.setOutlineThickness(2.f);
+            window.draw(attackVis);
+        }
     }
 }
 //-------------------------------------------------------
@@ -270,6 +304,12 @@ void Player::changeState(PlayerStateType newType) {
             break;
         case PlayerStateType::Pounce:
             mCurrentState = mPounceState.get();
+            break;
+        case PlayerStateType::MeleeAttack:
+            mCurrentState = mMeleeAttackState.get();
+            break;
+        case PlayerStateType::HeavyStrike:
+            mCurrentState = mHeavyStrikeState.get();
             break;
     }
 
@@ -891,3 +931,132 @@ void Player::recalculatePhysicsProperties(const Physics::PhysicsWorld* physicsWo
     }
 }
 //-------------------------------------------------------
+
+//------------[Get Stamina - Query Current Stamina Points]-------------------
+float Player::getStamina() const {
+    return mStamina;
+}
+//-------------------------------------------------------
+
+//------------[Get Max Stamina - Query Maximum Stamina Capacity]-------------------
+float Player::getMaxStamina() const {
+    return mMaxStamina;
+}
+//-------------------------------------------------------
+
+//------------[Has Stamina - Check If Stamina Gauge Suffices]-------------------
+bool Player::hasStamina(float amount) const {
+    return mStamina >= amount;
+}
+//-------------------------------------------------------
+
+//------------[Consume Stamina - Spend Stamina and Trigger Regen Delay]-------------------
+bool Player::consumeStamina(float amount) {
+    if (mStamina < amount) return false;
+    mStamina -= amount;
+    mStaminaRegenDelayTimer = 0.8f;
+    return true;
+}
+//-------------------------------------------------------
+
+//------------[Restore Stamina - Replenish Stamina Points]-------------------
+void Player::restoreStamina(float amount) {
+    mStamina = std::min(mMaxStamina, mStamina + amount);
+}
+//-------------------------------------------------------
+
+//------------[Get Mana - Query Current Mana Points]-------------------
+float Player::getMana() const {
+    return mMana;
+}
+//-------------------------------------------------------
+
+//------------[Get Max Mana - Query Maximum Mana Capacity]-------------------
+float Player::getMaxMana() const {
+    return mMaxMana;
+}
+//-------------------------------------------------------
+
+//------------[Has Mana - Check If Mana Suffices]-------------------
+bool Player::hasMana(float amount) const {
+    return mMana >= amount;
+}
+//-------------------------------------------------------
+
+//------------[Consume Mana - Spend Mana Points]-------------------
+bool Player::consumeMana(float amount) {
+    if (mMana < amount) return false;
+    mMana -= amount;
+    return true;
+}
+//-------------------------------------------------------
+
+//------------[Restore Mana - Replenish Mana Points]-------------------
+void Player::restoreMana(float amount) {
+    mMana = std::min(mMaxMana, mMana + amount);
+}
+//-------------------------------------------------------
+
+//------------[Get Rage - Query Current Beast Rage]-------------------
+float Player::getRage() const {
+    return mRage;
+}
+//-------------------------------------------------------
+
+//------------[Get Max Rage - Query Maximum Beast Rage Capacity]-------------------
+float Player::getMaxRage() const {
+    return mMaxRage;
+}
+//-------------------------------------------------------
+
+//------------[Add Rage - Increase Beast Rage Upon Attacks]-------------------
+void Player::addRage(float amount) {
+    mRage = std::min(mMaxRage, mRage + amount);
+    mRageDecayDelayTimer = 3.0f;
+}
+//-------------------------------------------------------
+
+//------------[Consume Rage - Spend Beast Rage For Heavy Strikes]-------------------
+bool Player::consumeRage(float amount) {
+    if (mRage < amount) return false;
+    mRage -= amount;
+    return true;
+}
+//-------------------------------------------------------
+
+//------------[Get Hurtbox Const - Access Defensive Box Const]-------------------
+const Combat::Hurtbox& Player::getHurtbox() const {
+    return mHurtbox;
+}
+//-------------------------------------------------------
+
+//------------[Get Hurtbox - Access Defensive Box]-------------------
+Combat::Hurtbox& Player::getHurtbox() {
+    return mHurtbox;
+}
+//-------------------------------------------------------
+
+//------------[Get Attack Hitbox Const - Access Offensive Box Const]-------------------
+const Combat::Hitbox& Player::getAttackHitbox() const {
+    return mAttackHitbox;
+}
+//-------------------------------------------------------
+
+//------------[Get Attack Hitbox - Access Offensive Box]-------------------
+Combat::Hitbox& Player::getAttackHitbox() {
+    return mAttackHitbox;
+}
+//-------------------------------------------------------
+
+//------------[Set Attack Hitbox - Activate Offensive Attack Box]-------------------
+void Player::setAttackHitbox(const Combat::Hitbox& hitbox) {
+    mAttackHitbox = hitbox;
+}
+//-------------------------------------------------------
+
+//------------[Deactivate Attack Hitbox - Disable Offensive Attack Box]-------------------
+void Player::deactivateAttackHitbox() {
+    mAttackHitbox.active = false;
+}
+//-------------------------------------------------------
+

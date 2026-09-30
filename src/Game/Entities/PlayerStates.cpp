@@ -1,7 +1,9 @@
 #include <Game/Entities/PlayerStates.hpp>
 #include <Game/Entities/Player.hpp>
+#include <Game/Combat/CombatBoxes.hpp>
 #include <Engine/Physics/PhysicsWorld.hpp>
 #include <SFML/Window/Keyboard.hpp>
+#include <SFML/Window/Mouse.hpp>
 #include <algorithm>
 #include <cmath>
 
@@ -63,6 +65,22 @@ void PlayerIdleState::fixedUpdate(Player& player, float dt, const Map& map, cons
             player.changeState(PlayerStateType::Pounce);
         }
         return;
+    }
+
+    // Combat action: Light Slash (Witch) / Heavy Strike (Beast)
+    bool attackPressed = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) ||
+                         sf::Keyboard::isKeyPressed(sf::Keyboard::Key::F) ||
+                         sf::Keyboard::isKeyPressed(sf::Keyboard::Key::J);
+    if (attackPressed) {
+        if (player.getForm() == PlayerForm::Witch) {
+            if (player.consumeStamina(20.f)) {
+                player.changeState(PlayerStateType::MeleeAttack);
+                return;
+            }
+        } else {
+            player.changeState(PlayerStateType::HeavyStrike);
+            return;
+        }
     }
 
     // Horizontal movement input
@@ -133,6 +151,22 @@ void PlayerRunState::fixedUpdate(Player& player, float dt, const Map& map, const
             player.changeState(PlayerStateType::Pounce);
         }
         return;
+    }
+
+    // Combat action: Light Slash (Witch) / Heavy Strike (Beast)
+    bool attackPressed = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) ||
+                         sf::Keyboard::isKeyPressed(sf::Keyboard::Key::F) ||
+                         sf::Keyboard::isKeyPressed(sf::Keyboard::Key::J);
+    if (attackPressed) {
+        if (player.getForm() == PlayerForm::Witch) {
+            if (player.consumeStamina(20.f)) {
+                player.changeState(PlayerStateType::MeleeAttack);
+                return;
+            }
+        } else {
+            player.changeState(PlayerStateType::HeavyStrike);
+            return;
+        }
     }
 
     // Horizontal movement acceleration
@@ -215,6 +249,22 @@ void PlayerAirborneState::fixedUpdate(Player& player, float dt, const Map& map, 
             player.changeState(PlayerStateType::Pounce);
         }
         return;
+    }
+
+    // Aerial combat action: Light Slash (Witch) / Heavy Strike (Beast)
+    bool attackPressed = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) ||
+                         sf::Keyboard::isKeyPressed(sf::Keyboard::Key::F) ||
+                         sf::Keyboard::isKeyPressed(sf::Keyboard::Key::J);
+    if (attackPressed) {
+        if (player.getForm() == PlayerForm::Witch) {
+            if (player.consumeStamina(20.f)) {
+                player.changeState(PlayerStateType::MeleeAttack);
+                return;
+            }
+        } else {
+            player.changeState(PlayerStateType::HeavyStrike);
+            return;
+        }
     }
 
     bool left = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A);
@@ -332,6 +382,20 @@ void PlayerAirborneState::fixedUpdate(Player& player, float dt, const Map& map, 
 
 //------------[Enter - Initialize Witch Air-Dash Burst & Freeze Timer]-------------------
 void PlayerDashState::enter(Player& player) {
+    // Air-Dash consumes stamina in Witch Form
+    if (!player.consumeStamina(25.f)) {
+        player.setIsDashing(false);
+        if (player.getIsGrounded()) {
+            player.changeState(PlayerStateType::Idle);
+        } else {
+            player.changeState(PlayerStateType::Airborne);
+        }
+        return;
+    }
+
+    // Enable invulnerability frames (i-frames) during dodge
+    player.getHurtbox().invulnerable = true;
+
     player.setIsDashing(true);
     player.setDashTimer(0.15f);
     player.setDashFreezeTimer(0.07f);
@@ -364,6 +428,7 @@ void PlayerDashState::enter(Player& player) {
 
 //------------[Exit - Restore Normal Physics & Retain Momentum]-------------------
 void PlayerDashState::exit(Player& player) {
+    player.getHurtbox().invulnerable = false;
     player.setIsDashing(false);
     sf::Vector2f vel = player.getVelocity();
     if (player.getDashDirection().y < 0.f) {
@@ -429,6 +494,7 @@ void PlayerDashState::fixedUpdate(Player& player, float dt, const Map& map, cons
 void PlayerPounceState::enter(Player& player) {
     player.setIsDashing(true);
     player.setDashCooldownTimer(0.6f);
+    player.addRage(12.f); // Pounce action generates rage
 
     bool down = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S);
 
@@ -507,3 +573,178 @@ void PlayerPounceState::fixedUpdate(Player& player, float dt, const Map& map, co
     }
 }
 //-------------------------------------------------------
+
+//=============================================================================
+// PlayerMeleeAttackState (Witch Form Fast Light Slash)
+//=============================================================================
+
+//------------[Enter - Initialize Witch Light Slash Attack]-------------------
+void PlayerMeleeAttackState::enter(Player& player) {
+    mAttackTimer = 0.f;
+    mHitboxActivated = false;
+    mHitboxDeactivated = false;
+    player.deactivateAttackHitbox();
+
+    // Small forward lunge impulse
+    sf::Vector2f vel = player.getVelocity();
+    vel.x = player.isFacingRight() ? 120.f : -120.f;
+    player.setVelocity(vel);
+}
+//-------------------------------------------------------
+
+//------------[Exit - Reset Attack Hitbox]-------------------
+void PlayerMeleeAttackState::exit(Player& player) {
+    player.deactivateAttackHitbox();
+    mHitboxActivated = false;
+    mHitboxDeactivated = false;
+}
+//-------------------------------------------------------
+
+//------------[Handle Input - Process Attack Key Events]-------------------
+void PlayerMeleeAttackState::handleInput(Player& player, const sf::Event& event) {
+    (void)player;
+    (void)event;
+}
+//-------------------------------------------------------
+
+//------------[Fixed Update - Step Attack Windup, Active Hitbox Window & Recovery]-------------------
+void PlayerMeleeAttackState::fixedUpdate(Player& player, float dt, const Map& map, const Physics::PhysicsWorld& physicsWorld) {
+    (void)map;
+    mAttackTimer += dt;
+
+    sf::Vector2f vel = player.getVelocity();
+    if (player.getIsGrounded()) {
+        if (vel.x > 0.f) {
+            vel.x -= player.getFriction() * 1.5f * dt;
+            if (vel.x < 0.f) vel.x = 0.f;
+        } else if (vel.x < 0.f) {
+            vel.x += player.getFriction() * 1.5f * dt;
+            if (vel.x > 0.f) vel.x = 0.f;
+        }
+    } else {
+        vel.y += player.getGravity() * dt;
+    }
+    player.setVelocity(vel);
+    player.moveWithSweptCCD(vel * dt, physicsWorld, false);
+
+    // Frame window: 0.00s - 0.08s = startup windup
+    //               0.08s - 0.22s = active slash hitbox
+    //               0.22s - 0.32s = recovery
+    if (mAttackTimer >= 0.08f && !mHitboxActivated) {
+        mHitboxActivated = true;
+        Combat::Hitbox slash;
+        slash.damage = 25.f;
+        slash.poiseDamage = 15.f;
+        slash.knockback = player.isFacingRight() ? sf::Vector2f(200.f, -80.f) : sf::Vector2f(-200.f, -80.f);
+        slash.active = true;
+
+        if (player.isFacingRight()) {
+            slash.localBounds = Physics::AABB::fromPositionSize({20.f, -2.f}, {36.f, 38.f});
+        } else {
+            slash.localBounds = Physics::AABB::fromPositionSize({-26.f, -2.f}, {36.f, 38.f});
+        }
+        player.setAttackHitbox(slash);
+    } else if (mAttackTimer >= 0.22f && !mHitboxDeactivated) {
+        mHitboxDeactivated = true;
+        player.deactivateAttackHitbox();
+    }
+
+    if (mAttackTimer >= 0.32f) {
+        if (player.getIsGrounded()) {
+            player.changeState(PlayerStateType::Idle);
+        } else {
+            player.changeState(PlayerStateType::Airborne);
+        }
+    }
+}
+//-------------------------------------------------------
+
+
+//=============================================================================
+// PlayerHeavyStrikeState (Beast Form Heavy Poise-Breaking Claw Strike)
+//=============================================================================
+
+//------------[Enter - Initialize Beast Heavy Claw Strike]-------------------
+void PlayerHeavyStrikeState::enter(Player& player) {
+    mAttackTimer = 0.f;
+    mHitboxActivated = false;
+    mHitboxDeactivated = false;
+    player.deactivateAttackHitbox();
+
+    // Heavy strike builds rage upon execution
+    player.addRage(15.f);
+
+    // Forward claw lunge impulse
+    sf::Vector2f vel = player.getVelocity();
+    vel.x = player.isFacingRight() ? 220.f : -220.f;
+    player.setVelocity(vel);
+}
+//-------------------------------------------------------
+
+//------------[Exit - Reset Heavy Strike Hitbox]-------------------
+void PlayerHeavyStrikeState::exit(Player& player) {
+    player.deactivateAttackHitbox();
+    mHitboxActivated = false;
+    mHitboxDeactivated = false;
+}
+//-------------------------------------------------------
+
+//------------[Handle Input - Process Heavy Strike Key Events]-------------------
+void PlayerHeavyStrikeState::handleInput(Player& player, const sf::Event& event) {
+    (void)player;
+    (void)event;
+}
+//-------------------------------------------------------
+
+//------------[Fixed Update - Step Heavy Strike Poise-Breaking Arc & Rage Generation]-------------------
+void PlayerHeavyStrikeState::fixedUpdate(Player& player, float dt, const Map& map, const Physics::PhysicsWorld& physicsWorld) {
+    (void)map;
+    mAttackTimer += dt;
+
+    sf::Vector2f vel = player.getVelocity();
+    if (player.getIsGrounded()) {
+        if (vel.x > 0.f) {
+            vel.x -= player.getFriction() * 1.2f * dt;
+            if (vel.x < 0.f) vel.x = 0.f;
+        } else if (vel.x < 0.f) {
+            vel.x += player.getFriction() * 1.2f * dt;
+            if (vel.x > 0.f) vel.x = 0.f;
+        }
+    } else {
+        vel.y += player.getGravity() * dt;
+    }
+    player.setVelocity(vel);
+    player.moveWithSweptCCD(vel * dt, physicsWorld, false);
+
+    // Frame window: 0.00s - 0.16s = heavy windup
+    //               0.16s - 0.34s = active heavy claw arc
+    //               0.34s - 0.46s = recovery
+    if (mAttackTimer >= 0.16f && !mHitboxActivated) {
+        mHitboxActivated = true;
+        Combat::Hitbox claw;
+        claw.damage = 50.f;
+        claw.poiseDamage = 45.f; // Massive poise-breaking capability
+        claw.knockback = player.isFacingRight() ? sf::Vector2f(350.f, -140.f) : sf::Vector2f(-350.f, -140.f);
+        claw.active = true;
+
+        if (player.isFacingRight()) {
+            claw.localBounds = Physics::AABB::fromPositionSize({26.f, -6.f}, {48.f, 52.f});
+        } else {
+            claw.localBounds = Physics::AABB::fromPositionSize({-32.f, -6.f}, {48.f, 52.f});
+        }
+        player.setAttackHitbox(claw);
+    } else if (mAttackTimer >= 0.34f && !mHitboxDeactivated) {
+        mHitboxDeactivated = true;
+        player.deactivateAttackHitbox();
+    }
+
+    if (mAttackTimer >= 0.46f) {
+        if (player.getIsGrounded()) {
+            player.changeState(PlayerStateType::Idle);
+        } else {
+            player.changeState(PlayerStateType::Airborne);
+        }
+    }
+}
+//-------------------------------------------------------
+

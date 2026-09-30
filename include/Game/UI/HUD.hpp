@@ -22,6 +22,9 @@ public:
   void setFrameTime(float ms);
   void setPlayerForm(std::string_view form);
   void setPlayerState(std::string_view state);
+  void setStamina(float current, float max);
+  void setMana(float current, float max);
+  void setRage(float current, float max);
 
 private:
   bool mShowHitbox;
@@ -37,4 +40,11 @@ private:
   float mFrameTimeMs;
   std::string mPlayerForm;
   std::string mPlayerState;
+
+  float mStamina{100.f};
+  float mMaxStamina{100.f};
+  float mMana{100.f};
+  float mMaxMana{100.f};
+  float mRage{0.f};
+  float mMaxRage{100.f};
 };

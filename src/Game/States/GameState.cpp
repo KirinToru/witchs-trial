@@ -84,6 +84,9 @@ void GameState::update(sf::Time dt) {
   mHUD.setEntityCount(static_cast<int>(mPhysicsWorld.getBodies().size()));
   mHUD.setPlayerForm(mPlayer.getForm() == PlayerForm::Witch ? "Witch" : "Beast");
   mHUD.setPlayerState(mPlayer.getStateName());
+  mHUD.setStamina(mPlayer.getStamina(), mPlayer.getMaxStamina());
+  mHUD.setMana(mPlayer.getMana(), mPlayer.getMaxMana());
+  mHUD.setRage(mPlayer.getRage(), mPlayer.getMaxRage());
   mHUD.update(dt);
 
   sf::Vector2f playerPos = mPlayer.getPosition();

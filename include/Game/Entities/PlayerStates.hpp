@@ -146,3 +146,76 @@ private:
     float mSmashRecoveryTimer{0.f};
     float mDurationTimer{0.f};
 };
+
+class PlayerMeleeAttackState : public PlayerState {
+public:
+//------------[Virtual Destructor - Melee Attack State Cleanup]-------------------
+    ~PlayerMeleeAttackState() override = default;
+//-------------------------------------------------------
+
+//------------[Enter - Initialize Witch Light Slash Attack]-------------------
+    void enter(Player& player) override;
+//-------------------------------------------------------
+
+//------------[Exit - Reset Attack Hitbox]-------------------
+    void exit(Player& player) override;
+//-------------------------------------------------------
+
+//------------[Handle Input - Process Attack Key Events]-------------------
+    void handleInput(Player& player, const sf::Event& event) override;
+//-------------------------------------------------------
+
+//------------[Fixed Update - Step Attack Windup, Active Hitbox Window & Recovery]-------------------
+    void fixedUpdate(Player& player, float dt, const Map& map, const Physics::PhysicsWorld& physicsWorld) override;
+//-------------------------------------------------------
+
+//------------[Get Name - Return Melee Attack State Name]-------------------
+    std::string_view getName() const override { return "MeleeAttack"; }
+//-------------------------------------------------------
+
+//------------[Get Type - Return Melee Attack State Type]-------------------
+    PlayerStateType getType() const override { return PlayerStateType::MeleeAttack; }
+//-------------------------------------------------------
+
+private:
+    float mAttackTimer{0.f};
+    bool mHitboxActivated{false};
+    bool mHitboxDeactivated{false};
+};
+
+class PlayerHeavyStrikeState : public PlayerState {
+public:
+//------------[Virtual Destructor - Heavy Strike State Cleanup]-------------------
+    ~PlayerHeavyStrikeState() override = default;
+//-------------------------------------------------------
+
+//------------[Enter - Initialize Beast Heavy Claw Strike]-------------------
+    void enter(Player& player) override;
+//-------------------------------------------------------
+
+//------------[Exit - Reset Heavy Strike Hitbox]-------------------
+    void exit(Player& player) override;
+//-------------------------------------------------------
+
+//------------[Handle Input - Process Heavy Strike Key Events]-------------------
+    void handleInput(Player& player, const sf::Event& event) override;
+//-------------------------------------------------------
+
+//------------[Fixed Update - Step Heavy Strike Poise-Breaking Arc & Rage Generation]-------------------
+    void fixedUpdate(Player& player, float dt, const Map& map, const Physics::PhysicsWorld& physicsWorld) override;
+//-------------------------------------------------------
+
+//------------[Get Name - Return Heavy Strike State Name]-------------------
+    std::string_view getName() const override { return "HeavyStrike"; }
+//-------------------------------------------------------
+
+//------------[Get Type - Return Heavy Strike State Type]-------------------
+    PlayerStateType getType() const override { return PlayerStateType::HeavyStrike; }
+//-------------------------------------------------------
+
+private:
+    float mAttackTimer{0.f};
+    bool mHitboxActivated{false};
+    bool mHitboxDeactivated{false};
+};
+

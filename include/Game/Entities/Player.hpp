@@ -2,6 +2,7 @@
 
 #include <Engine/Physics/AABB.hpp>
 #include <Engine/Physics/RigidBody.hpp>
+#include <Game/Combat/CombatBoxes.hpp>
 #include <Game/Entities/PlayerState.hpp>
 #include <Game/Entities/PlayerStates.hpp>
 #include <SFML/Graphics.hpp>
@@ -290,6 +291,80 @@ public:
     void updateAnimation(float dt);
 //-------------------------------------------------------
 
+//------------[Get Stamina - Query Current Stamina]-------------------
+    float getStamina() const;
+//-------------------------------------------------------
+
+//------------[Get Max Stamina - Query Maximum Stamina Capacity]-------------------
+    float getMaxStamina() const;
+//-------------------------------------------------------
+
+//------------[Has Stamina - Check If Stamina Gauge Suffices]-------------------
+    bool hasStamina(float amount) const;
+//-------------------------------------------------------
+
+//------------[Consume Stamina - Spend Stamina and Trigger Regen Delay]-------------------
+    bool consumeStamina(float amount);
+//-------------------------------------------------------
+
+//------------[Restore Stamina - Replenish Stamina Points]-------------------
+    void restoreStamina(float amount);
+//-------------------------------------------------------
+
+//------------[Get Mana - Query Current Mana Points]-------------------
+    float getMana() const;
+//-------------------------------------------------------
+
+//------------[Get Max Mana - Query Maximum Mana Capacity]-------------------
+    float getMaxMana() const;
+//-------------------------------------------------------
+
+//------------[Has Mana - Check If Mana Suffices]-------------------
+    bool hasMana(float amount) const;
+//-------------------------------------------------------
+
+//------------[Consume Mana - Spend Mana Points]-------------------
+    bool consumeMana(float amount);
+//-------------------------------------------------------
+
+//------------[Restore Mana - Replenish Mana Points]-------------------
+    void restoreMana(float amount);
+//-------------------------------------------------------
+
+//------------[Get Rage - Query Current Beast Rage]-------------------
+    float getRage() const;
+//-------------------------------------------------------
+
+//------------[Get Max Rage - Query Maximum Beast Rage Capacity]-------------------
+    float getMaxRage() const;
+//-------------------------------------------------------
+
+//------------[Add Rage - Increase Beast Rage Upon Attacks]-------------------
+    void addRage(float amount);
+//-------------------------------------------------------
+
+//------------[Consume Rage - Spend Beast Rage For Heavy Strikes]-------------------
+    bool consumeRage(float amount);
+//-------------------------------------------------------
+
+//------------[Get Hurtbox - Access Player Defensive Vulnerability Box]-------------------
+    const Combat::Hurtbox& getHurtbox() const;
+    Combat::Hurtbox& getHurtbox();
+//-------------------------------------------------------
+
+//------------[Get Attack Hitbox - Access Offensive Attack Box]-------------------
+    const Combat::Hitbox& getAttackHitbox() const;
+    Combat::Hitbox& getAttackHitbox();
+//-------------------------------------------------------
+
+//------------[Set Attack Hitbox - Activate Offensive Attack Box]-------------------
+    void setAttackHitbox(const Combat::Hitbox& hitbox);
+//-------------------------------------------------------
+
+//------------[Deactivate Attack Hitbox - Disable Offensive Attack Box]-------------------
+    void deactivateAttackHitbox();
+//-------------------------------------------------------
+
 private:
 //------------[Recalculate Physics Properties - Update AABB, Mass, and Constants for Active Form]-------------------
     void recalculatePhysicsProperties(const Physics::PhysicsWorld* physicsWorld = nullptr);
@@ -307,7 +382,27 @@ private:
     std::unique_ptr<PlayerAirborneState> mAirborneState;
     std::unique_ptr<PlayerDashState> mDashState;
     std::unique_ptr<PlayerPounceState> mPounceState;
+    std::unique_ptr<PlayerMeleeAttackState> mMeleeAttackState;
+    std::unique_ptr<PlayerHeavyStrikeState> mHeavyStrikeState;
     PlayerState* mCurrentState{nullptr};
+
+    // Combat Resources (Witch: Stamina & Mana, Beast: Rage)
+    float mStamina{100.f};
+    float mMaxStamina{100.f};
+    float mStaminaRegenRate{35.f};
+    float mStaminaRegenDelayTimer{0.f};
+
+    float mMana{100.f};
+    float mMaxMana{100.f};
+
+    float mRage{0.f};
+    float mMaxRage{100.f};
+    float mRageDecayDelayTimer{0.f};
+    float mRageDecayRate{10.f};
+
+    // Combat Collision Boxes
+    Combat::Hurtbox mHurtbox;
+    Combat::Hitbox mAttackHitbox;
 
     // Physics world registration
     Physics::RigidBody* mRigidBody{nullptr};

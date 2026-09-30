@@ -22,7 +22,9 @@ enum class PlayerStateType : uint8_t {
     Run,
     Airborne,
     Dash,
-    Pounce
+    Pounce,
+    MeleeAttack,
+    HeavyStrike
 };
 
 class PlayerState {
