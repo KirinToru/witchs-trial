@@ -27,6 +27,10 @@ public:
   void setMana(float current, float max);
   void setRage(float current, float max);
 
+//------------[Set Boss Info - Update Boss Encounter Telemetry]-------------------
+  void setBossInfo(bool active, std::string_view name = "", float health = 0.f, float maxHealth = 1.f, float posture = 0.f, float maxPosture = 1.f, int phase = 1);
+//-------------------------------------------------------
+
 private:
   bool mShowHitbox;
   bool mShowFPS;
@@ -50,4 +54,13 @@ private:
   float mMaxMana{100.f};
   float mRage{0.f};
   float mMaxRage{100.f};
+
+  bool mBossActive{false};
+  std::string mBossName;
+  float mBossHealth{0.f};
+  float mBossMaxHealth{1.f};
+  float mBossPosture{0.f};
+  float mBossMaxPosture{1.f};
+  int mBossPhase{1};
 };
+

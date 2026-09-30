@@ -101,6 +101,71 @@ void HUD::render(sf::RenderWindow& window) {
       // Beast Form: Rage Meter (Crimson/Orange)
       drawResourceBar(baseY + spacing, mRage, mMaxRage, sf::Color(240, 90, 30), "RAGE");
     }
+
+    // 3. Souls-like Massive Boss Health & Posture Bar
+    if (mBossActive && mBossHealth > 0.f) {
+      float screenW = static_cast<float>(window.getSize().x);
+      float screenH = static_cast<float>(window.getSize().y);
+      float barW = 660.f;
+      float barH = 16.f;
+      float barX = (screenW - barW) * 0.5f;
+      float barY = screenH - 58.f;
+
+      // Boss Name Text
+      sf::Text bossNameText(mFPSFont, mBossName, 15);
+      bossNameText.setFillColor(mBossPhase == 2 ? sf::Color(255, 100, 50) : sf::Color(245, 215, 80));
+      bossNameText.setOutlineColor(sf::Color::Black);
+      bossNameText.setOutlineThickness(1.5f);
+      sf::FloatRect textBounds = bossNameText.getLocalBounds();
+      bossNameText.setPosition({barX + (barW - textBounds.size.x) * 0.5f, barY - 22.f});
+      window.draw(bossNameText);
+
+      // Background Frame
+      sf::RectangleShape bg({barW + 8.f, barH + 8.f});
+      bg.setPosition({barX - 4.f, barY - 4.f});
+      bg.setFillColor(sf::Color(20, 20, 25, 230));
+      bg.setOutlineColor(mBossPhase == 2 ? sf::Color(220, 50, 20) : sf::Color(190, 150, 40));
+      bg.setOutlineThickness(1.5f);
+      window.draw(bg);
+
+      // Depletion Backing (Dark Crimson)
+      sf::RectangleShape underFill({barW, barH});
+      underFill.setPosition({barX, barY});
+      underFill.setFillColor(sf::Color(60, 15, 15));
+      window.draw(underFill);
+
+      // Health Fill
+      float hpPct = std::clamp(mBossHealth / mBossMaxHealth, 0.f, 1.f);
+      if (hpPct > 0.f) {
+        sf::RectangleShape hpFill({barW * hpPct, barH});
+        hpFill.setPosition({barX, barY});
+        if (mBossPhase == 2) {
+          hpFill.setFillColor(sf::Color(235, 60, 20));
+        } else {
+          hpFill.setFillColor(sf::Color(200, 35, 35));
+        }
+        window.draw(hpFill);
+      }
+
+      // Posture / Poise Under-bar
+      float postureW = barW * 0.6f;
+      float postureH = 3.5f;
+      float postureX = (screenW - postureW) * 0.5f;
+      float postureY = barY + barH + 7.f;
+
+      sf::RectangleShape postureBg({postureW, postureH});
+      postureBg.setPosition({postureX, postureY});
+      postureBg.setFillColor(sf::Color(30, 30, 35, 200));
+      window.draw(postureBg);
+
+      float posturePct = std::clamp(mBossPosture / mBossMaxPosture, 0.f, 1.f);
+      if (posturePct > 0.f) {
+        sf::RectangleShape postureFill({postureW * posturePct, postureH});
+        postureFill.setPosition({postureX, postureY});
+        postureFill.setFillColor(sf::Color(240, 190, 45));
+        window.draw(postureFill);
+      }
+    }
   }
 
   window.setView(oldView);
@@ -172,6 +237,18 @@ void HUD::setMana(float current, float max) {
 void HUD::setRage(float current, float max) {
   mRage = current;
   mMaxRage = max;
+}
+//-------------------------------------------------------
+
+//------------[Set Boss Info - Update Boss Encounter Telemetry]-------------------
+void HUD::setBossInfo(bool active, std::string_view name, float health, float maxHealth, float posture, float maxPosture, int phase) {
+  mBossActive = active;
+  mBossName = std::string(name);
+  mBossHealth = health;
+  mBossMaxHealth = maxHealth > 0.f ? maxHealth : 1.f;
+  mBossPosture = posture;
+  mBossMaxPosture = maxPosture > 0.f ? maxPosture : 1.f;
+  mBossPhase = phase;
 }
 //-------------------------------------------------------
 

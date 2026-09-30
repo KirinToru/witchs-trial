@@ -31,6 +31,11 @@ void GameState::loadLevel(const std::string &filename) {
   mPhysicsWorld.clear();
   mObjectManager.clear();
   mHitEnemiesThisSwing.clear();
+  mArenaLocked = false;
+  mArenaLeftWall = nullptr;
+  mArenaRightWall = nullptr;
+  mBoss = nullptr;
+  mHUD.setBossInfo(false);
 
   if (mMap.loadFromFile(filename, &mPhysicsWorld)) {
     mPlayer.initPhysics(mPhysicsWorld);
@@ -41,16 +46,32 @@ void GameState::loadLevel(const std::string &filename) {
     float mapW = mMap.getWidth();
     float mapH = mMap.getHeight();
 
-    // Spawn Inquisitor Footmen on open terrain ahead of player start (avoiding column colliders)
-    sf::Vector2f startPos = mMap.getStartPosition();
-    mObjectManager.spawnInquisitor({startPos.x + 160.f, startPos.y - 10.f});
-    mObjectManager.spawnInquisitor({startPos.x + 400.f, startPos.y - 10.f});
+    // 1. Bottom Floor - Enemies and props around start position (y ≈ 1540-1568)
+    mObjectManager.spawnInquisitor({450.f, 1540.f});
+    mObjectManager.spawnInquisitor({1150.f, 1540.f});
+    mObjectManager.spawnCrate({350.f, 1540.f});
+    mObjectManager.spawnBarrel({650.f, 1540.f});
+    mObjectManager.spawnBarrel({980.f, 1540.f});
+    mObjectManager.spawnCrate({1250.f, 1540.f});
 
-    // Spawn destructible environmental props (crates & barrels) for beast destruction
-    mObjectManager.spawnCrate({startPos.x + 70.f, startPos.y});
-    mObjectManager.spawnCrate({startPos.x + 115.f, startPos.y});
-    mObjectManager.spawnBarrel({startPos.x + 300.f, startPos.y});
-    mObjectManager.spawnCrate({startPos.x + 345.f, startPos.y});
+    // 2. Middle Floor - Enemies and props on platforms (y ≈ 1030-1056)
+    mObjectManager.spawnInquisitor({200.f, 1030.f});
+    mObjectManager.spawnCrate({280.f, 1030.f});
+    mObjectManager.spawnInquisitor({800.f, 1030.f});
+    mObjectManager.spawnBarrel({730.f, 1030.f});
+    mObjectManager.spawnCrate({870.f, 1030.f});
+    mObjectManager.spawnInquisitor({1350.f, 1030.f});
+    mObjectManager.spawnCrate({1260.f, 1030.f});
+
+    // 3. Top Roof Arena - Grand Inquisitor Boss & Arena Trigger (y ≈ 600-640)
+    sf::Vector2f arenaCenter = {750.f, 440.f};
+    Physics::AABB triggerVolume = Physics::AABB::fromPositionSize({1260.f, 300.f}, {90.f, 350.f});
+    mArenaTrigger = ArenaTrigger(triggerVolume, arenaCenter, viewSize);
+    mBoss = mObjectManager.spawnBoss({750.f, 600.f});
+
+    mObjectManager.spawnBarrel({400.f, 610.f});
+    mObjectManager.spawnCrate({1100.f, 610.f});
+
     mObjectManager.settleProps(mPhysicsWorld);
 
     float camX = (mapW < viewSize.x)
@@ -114,6 +135,86 @@ void GameState::fixedUpdate(sf::Time dt) {
       }
     }
   }
+
+  // Check Boss Arena Lock Trigger
+  if (!mArenaTrigger.isCompleted() && !mArenaLocked) {
+    if (mArenaTrigger.check(mPlayer.getAABB())) {
+      engageArenaLock();
+    }
+  }
+
+  // Update Boss State and Live Telemetry in Arena
+  if (mArenaLocked && mBoss) {
+    if (mBoss->consumePhaseTransitionShake()) {
+      triggerCameraShake(12.f, 0.7f);
+      triggerHitStop(0.12f);
+    }
+
+    if (mBoss->isDead()) {
+      releaseArenaLock();
+    } else {
+      mHUD.setBossInfo(true, mBoss->getBossName(), mBoss->getHealth(), mBoss->getMaxHealth(),
+                       mBoss->getPosture(), mBoss->getMaxPosture(), mBoss->getPhaseNumber());
+    }
+  }
+}
+//-------------------------------------------------------
+
+//------------[Engage Arena Lock - Restrict Camera and Spawn Boundary Colliders]-------------------
+void GameState::engageArenaLock() {
+  if (mArenaLocked) return;
+  mArenaLocked = true;
+
+  sf::Vector2f center = mArenaTrigger.getArenaCenter();
+  sf::Vector2f viewSize = mCamera.getSize();
+  float halfW = viewSize.x * 0.5f;
+
+  // 1. Invisible static left boundary wall
+  Physics::RigidBodyDef leftDef;
+  leftDef.type = Physics::BodyType::Static;
+  leftDef.tag = Physics::ColliderTag::SolidWall;
+  leftDef.isOneWay = false;
+  leftDef.position = {center.x - halfW - 24.f, center.y - 500.f};
+  leftDef.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {24.f, 1000.f});
+  mArenaLeftWall = mPhysicsWorld.createBody(leftDef);
+
+  // 2. Invisible static right boundary wall
+  Physics::RigidBodyDef rightDef;
+  rightDef.type = Physics::BodyType::Static;
+  rightDef.tag = Physics::ColliderTag::SolidWall;
+  rightDef.isOneWay = false;
+  rightDef.position = {center.x + halfW, center.y - 500.f};
+  rightDef.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {24.f, 1000.f});
+  mArenaRightWall = mPhysicsWorld.createBody(rightDef);
+
+  if (mBoss) {
+    mBoss->engage();
+  }
+
+  triggerCameraShake(8.f, 0.45f);
+  triggerHitStop(0.08f);
+}
+//-------------------------------------------------------
+
+//------------[Release Arena Lock - Remove Boundary Colliders and Unlock Camera]-------------------
+void GameState::releaseArenaLock() {
+  if (!mArenaLocked) return;
+  mArenaLocked = false;
+
+  if (mArenaLeftWall) {
+    mPhysicsWorld.removeBody(mArenaLeftWall);
+    mArenaLeftWall = nullptr;
+  }
+  if (mArenaRightWall) {
+    mPhysicsWorld.removeBody(mArenaRightWall);
+    mArenaRightWall = nullptr;
+  }
+
+  mArenaTrigger.setCompleted(true);
+  mHUD.setBossInfo(false);
+
+  triggerCameraShake(14.f, 0.8f);
+  triggerHitStop(0.2f);
 }
 //-------------------------------------------------------
 
@@ -259,12 +360,20 @@ void GameState::update(sf::Time dt) {
   float mapW = mMap.getWidth();
   float mapH = mMap.getHeight();
 
-  float targetX = (mapW < viewSize.x)
-                      ? mapW / 2.f
-                      : std::clamp(playerPos.x, viewSize.x / 2.f, mapW - viewSize.x / 2.f);
-  float targetY = (mapH < viewSize.y)
-                      ? mapH / 2.f
-                      : std::clamp(playerPos.y, viewSize.y / 2.f, mapH - viewSize.y / 2.f);
+  float targetX = 0.f;
+  float targetY = 0.f;
+
+  if (mArenaLocked) {
+    targetX = mArenaTrigger.getArenaCenter().x;
+    targetY = mArenaTrigger.getArenaCenter().y;
+  } else {
+    targetX = (mapW < viewSize.x)
+                  ? mapW / 2.f
+                  : std::clamp(playerPos.x, viewSize.x / 2.f, mapW - viewSize.x / 2.f);
+    targetY = (mapH < viewSize.y)
+                  ? mapH / 2.f
+                  : std::clamp(playerPos.y, viewSize.y / 2.f, mapH - viewSize.y / 2.f);
+  }
 
   float lerpSpeed = 5.0f;
   mCameraBaseCenter.x += (targetX - mCameraBaseCenter.x) * lerpSpeed * dtSec;

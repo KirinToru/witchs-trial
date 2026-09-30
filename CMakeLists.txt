@@ -28,6 +28,7 @@ set(SOURCES
     "src/Game/Entities/EnemyStates.cpp"
     "src/Game/Entities/Enemy.cpp"
     "src/Game/Entities/InquisitorFootman.cpp"
+    "src/Game/Entities/GrandInquisitor.cpp"
     "src/Game/Entities/SourceMovementController2D.cpp"
     "src/Game/Entities/InteractiveProp2D.cpp"
     "src/Game/World/Map.cpp"

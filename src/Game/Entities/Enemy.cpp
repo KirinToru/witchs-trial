@@ -353,7 +353,9 @@ void Enemy::moveWithSweptCCD(sf::Vector2f displacement, const Physics::PhysicsWo
     // 1. Horizontal swept collision
     if (displacement.x != 0.f) {
         sf::Vector2f dispX{displacement.x, 0.f};
-        Physics::AABB boxX = getAABB();
+        Physics::AABB boxX = Physics::AABB::fromPositionSize(
+            {mShape.getPosition().x, mShape.getPosition().y + 2.f},
+            {mShape.getSize().x, mShape.getSize().y - 6.f});
         Physics::SweptHit hitX = physicsWorld.sweepTest(boxX, dispX, ignoreBody, false);
 
         if (hitX.hit) {
@@ -367,6 +369,8 @@ void Enemy::moveWithSweptCCD(sf::Vector2f displacement, const Physics::PhysicsWo
 
     // 2. Vertical swept collision
     mIsGrounded = false;
+    float prevBottom = mShape.getPosition().y + mShape.getSize().y;
+
     if (displacement.y != 0.f) {
         sf::Vector2f dispY{0.f, displacement.y};
         Physics::AABB boxY = getAABB();
@@ -384,6 +388,32 @@ void Enemy::moveWithSweptCCD(sf::Vector2f displacement, const Physics::PhysicsWo
             }
         } else {
             mShape.move(dispY);
+        }
+    }
+
+    // 3. One-way platform landing check when descending
+    if (mVelocity.y >= 0.f) {
+        float currentBottom = mShape.getPosition().y + mShape.getSize().y;
+        Physics::AABB platformProbe = Physics::AABB::fromPositionSize(
+            {mShape.getPosition().x, prevBottom - 2.f},
+            {mShape.getSize().x, (currentBottom - prevBottom) + 8.f});
+
+        std::vector<Physics::RigidBody*> platforms = physicsWorld.queryAABB(platformProbe);
+        for (const auto* platform : platforms) {
+            if (platform && platform->isOneWay()) {
+                Physics::AABB pBox = platform->getWorldAABB();
+                float overlapX = std::min(mShape.getPosition().x + mShape.getSize().x, pBox.max.x) -
+                                 std::max(mShape.getPosition().x, pBox.min.x);
+
+                if (overlapX < 4.f) continue;
+
+                if (prevBottom <= pBox.min.y + 4.f && currentBottom >= pBox.min.y - 1.f) {
+                    mShape.setPosition({mShape.getPosition().x, pBox.min.y - mShape.getSize().y});
+                    mVelocity.y = 0.f;
+                    mIsGrounded = true;
+                    break;
+                }
+            }
         }
     }
 }
@@ -434,6 +464,56 @@ bool Enemy::isFacingRight() const {
 //------------[Set Facing Right - Update Facing Direction]-------------------
 void Enemy::setFacingRight(bool right) {
     mFacingRight = right;
+}
+//-------------------------------------------------------
+
+//------------[Has Ground Ahead - Check If Platform/Floor Extends In Front Of Feet]-------------------
+bool Enemy::hasGroundAhead(const Physics::PhysicsWorld& physicsWorld) const {
+    sf::Vector2f pos = mShape.getPosition();
+    sf::Vector2f size = mShape.getSize();
+    float bottomY = pos.y + size.y;
+
+    float probeX = mFacingRight ? (pos.x + size.x + 4.f) : (pos.x - 12.f);
+    Physics::AABB probe = Physics::AABB::fromPositionSize({probeX, bottomY - 4.f}, {8.f, 20.f});
+
+    for (const auto& body : physicsWorld.getBodies()) {
+        if (!body) continue;
+        Physics::AABB bodyAABB = body->getWorldAABB();
+        if (probe.intersects(bodyAABB)) {
+            if (body->isOneWay()) {
+                if (bodyAABB.min.y >= bottomY - 8.f && bodyAABB.min.y <= bottomY + 16.f) {
+                    return true;
+                }
+            } else {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+//-------------------------------------------------------
+
+//------------[Has Wall Ahead - Check If Solid Wall Obstructs Horizontal Movement]-------------------
+bool Enemy::hasWallAhead(const Physics::PhysicsWorld& physicsWorld) const {
+    sf::Vector2f pos = mShape.getPosition();
+    sf::Vector2f size = mShape.getSize();
+
+    float probeX = mFacingRight ? (pos.x + size.x + 1.f) : (pos.x - 7.f);
+    Physics::AABB probe = Physics::AABB::fromPositionSize({probeX, pos.y + 4.f}, {6.f, size.y - 12.f});
+
+    for (const auto& body : physicsWorld.getBodies()) {
+        if (!body || body->isOneWay()) continue;
+        if (probe.intersects(body->getWorldAABB())) {
+            return true;
+        }
+    }
+    return false;
+}
+//-------------------------------------------------------
+
+//------------[Is Grounded - Query Grounded State]-------------------
+bool Enemy::isGrounded() const {
+    return mIsGrounded;
 }
 //-------------------------------------------------------
 

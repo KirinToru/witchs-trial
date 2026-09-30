@@ -9,6 +9,8 @@
 #include <memory>
 
 #include <Game/Systems/ObjectManager.hpp>
+#include <Game/World/ArenaTrigger.hpp>
+#include <Game/Entities/GrandInquisitor.hpp>
 #include <vector>
 
 class GameState : public State {
@@ -41,6 +43,14 @@ private:
   void resolveCombatCollisions();
 //-------------------------------------------------------
 
+//------------[Engage Arena Lock - Restrict Camera and Spawn Boundary Colliders]-------------------
+  void engageArenaLock();
+//-------------------------------------------------------
+
+//------------[Release Arena Lock - Remove Boundary Colliders and Unlock Camera]-------------------
+  void releaseArenaLock();
+//-------------------------------------------------------
+
   Player mPlayer;
   Map mMap;
   Physics::PhysicsWorld mPhysicsWorld;
@@ -58,4 +68,10 @@ private:
   sf::Sprite mBackgroundSprite;
 
   HUD mHUD;
+
+  ArenaTrigger mArenaTrigger;
+  bool mArenaLocked{false};
+  Physics::RigidBody* mArenaLeftWall{nullptr};
+  Physics::RigidBody* mArenaRightWall{nullptr};
+  GrandInquisitor* mBoss{nullptr};
 };

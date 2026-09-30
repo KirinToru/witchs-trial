@@ -67,8 +67,8 @@ inline SweptHit sweepAABB(const AABB& movingBox, sf::Vector2f displacement, cons
         tFarX = (expandedMax.x - rayOrigin.x) / rayDir.x;
         if (tNearX > tFarX) std::swap(tNearX, tFarX);
     } else {
-        if (rayOrigin.x < expandedMin.x || rayOrigin.x > expandedMax.x) {
-            return result; // Parallel and outside
+        if (rayOrigin.x <= expandedMin.x || rayOrigin.x >= expandedMax.x) {
+            return result; // Parallel and outside or touching
         }
         tNearX = -std::numeric_limits<float>::infinity();
         tFarX = std::numeric_limits<float>::infinity();
@@ -80,8 +80,8 @@ inline SweptHit sweepAABB(const AABB& movingBox, sf::Vector2f displacement, cons
         tFarY = (expandedMax.y - rayOrigin.y) / rayDir.y;
         if (tNearY > tFarY) std::swap(tNearY, tFarY);
     } else {
-        if (rayOrigin.y < expandedMin.y || rayOrigin.y > expandedMax.y) {
-            return result; // Parallel and outside
+        if (rayOrigin.y <= expandedMin.y || rayOrigin.y >= expandedMax.y) {
+            return result; // Parallel and outside or touching
         }
         tNearY = -std::numeric_limits<float>::infinity();
         tFarY = std::numeric_limits<float>::infinity();

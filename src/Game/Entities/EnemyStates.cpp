@@ -10,10 +10,7 @@
 
 //------------[Enter - Initialize Idle State & Zero Velocity]-------------------
 void EnemyIdleState::enter(Enemy& enemy) {
-    sf::Vector2f vel = enemy.getVelocity();
-    vel.x = 0.f;
-    enemy.setVelocity(vel);
-    enemy.getAnimator().play("Idle");
+    enemy.getAnimator().play("Chase");
 }
 //-------------------------------------------------------
 
@@ -25,19 +22,32 @@ void EnemyIdleState::exit(Enemy& enemy) {
 
 //------------[Fixed Update - Check Line Of Sight & Detection Range (60Hz)]-------------------
 void EnemyIdleState::fixedUpdate(Enemy& enemy, float dt, const Player& player, const Physics::PhysicsWorld& physicsWorld) {
-    // 1. Settle on ground with gravity
     sf::Vector2f vel = enemy.getVelocity();
     vel.y += 980.f * dt;
-    enemy.setVelocity(vel);
-    enemy.moveWithSweptCCD({0.f, vel.y * dt}, physicsWorld, player.getRigidBody());
 
-    // 2. Query target proximity & Line of Sight
+    float patrolSpeed = enemy.getMoveSpeed() * 0.45f;
+
+    if (enemy.isGrounded()) {
+        if (!enemy.hasGroundAhead(physicsWorld) || enemy.hasWallAhead(physicsWorld)) {
+            enemy.setFacingRight(!enemy.isFacingRight());
+        }
+    }
+
+    vel.x = (enemy.isFacingRight() ? 1.f : -1.f) * patrolSpeed;
+
+    enemy.setVelocity(vel);
+    enemy.moveWithSweptCCD(vel * dt, physicsWorld, player.getRigidBody());
+    enemy.getAnimator().play("Chase");
+
     float dist = enemy.getDistanceToPlayer(player);
-    if (dist <= enemy.getDetectionRange()) {
-        if (enemy.hasLineOfSightToPlayer(player, physicsWorld)) {
+    float diffY = std::abs(player.getPosition().y - enemy.getPosition().y);
+
+    if (dist <= enemy.getAttackRange() && diffY < 35.f) {
+        if (enemy.getAttackCooldownTimer() <= 0.f && enemy.hasLineOfSightToPlayer(player, physicsWorld)) {
             float dir = enemy.getDirectionToPlayer(player);
             enemy.setFacingRight(dir > 0.f);
-            enemy.changeState(EnemyStateType::Chase);
+            enemy.changeState(EnemyStateType::TelegraphAttack);
+            return;
         }
     }
 }
@@ -93,6 +103,9 @@ void EnemyChaseState::fixedUpdate(Enemy& enemy, float dt, const Player& player, 
     } else {
         // Move towards player
         vel.x = dir * enemy.getMoveSpeed();
+        if (enemy.isGrounded() && !enemy.hasGroundAhead(physicsWorld)) {
+            vel.x = 0.f;
+        }
     }
 
     enemy.setVelocity(vel);
@@ -189,7 +202,7 @@ void EnemyActiveAttackState::fixedUpdate(Enemy& enemy, float dt, const Player& p
 
     if (enemy.getAnimator().isFinished() || mAttackTimer >= 0.45f) {
         enemy.setAttackCooldownTimer(0.9f);
-        enemy.changeState(EnemyStateType::Chase);
+        enemy.changeState(EnemyStateType::Idle);
     }
 }
 //-------------------------------------------------------

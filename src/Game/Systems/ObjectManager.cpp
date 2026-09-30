@@ -169,6 +169,16 @@ InquisitorFootman* ObjectManager::spawnInquisitor(sf::Vector2f position) {
 }
 //-------------------------------------------------------
 
+//------------[Spawn Boss - Instantiate Grand Inquisitor Boss Encounter]-------------------
+GrandInquisitor* ObjectManager::spawnBoss(sf::Vector2f position) {
+  auto boss = std::make_unique<GrandInquisitor>(position);
+  GrandInquisitor* ptr = boss.get();
+  mBoss = ptr;
+  mEnemies.push_back(std::move(boss));
+  return ptr;
+}
+//-------------------------------------------------------
+
 //------------[Add Enemy - Register Dynamically Allocated Enemy]-------------------
 void ObjectManager::addEnemy(std::unique_ptr<Enemy> enemy) {
   if (enemy) {
@@ -199,6 +209,7 @@ void ObjectManager::renderEnemies(sf::RenderWindow& window, bool showHitbox) {
 
 //------------[Clear Enemies - Remove All Spawned Enemies]-------------------
 void ObjectManager::clearEnemies() {
+  mBoss = nullptr;
   mEnemies.clear();
 }
 //-------------------------------------------------------
@@ -260,6 +271,7 @@ void ObjectManager::clear() {
   mSpawnedShapes.clear();
   mEnemies.clear();
   mProjectiles.clear();
+  mBoss = nullptr;
 }
 //-------------------------------------------------------
 

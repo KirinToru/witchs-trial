@@ -94,6 +94,18 @@ public:
     void setFacingRight(bool right);
 //-------------------------------------------------------
 
+//------------[Has Ground Ahead - Check If Platform/Floor Extends In Front Of Feet]-------------------
+    bool hasGroundAhead(const Physics::PhysicsWorld& physicsWorld) const;
+//-------------------------------------------------------
+
+//------------[Has Wall Ahead - Check If Solid Wall Obstructs Horizontal Movement]-------------------
+    bool hasWallAhead(const Physics::PhysicsWorld& physicsWorld) const;
+//-------------------------------------------------------
+
+//------------[Is Grounded - Query Grounded State]-------------------
+    bool isGrounded() const;
+//-------------------------------------------------------
+
 //------------[Get Health - Query Current Health Points]-------------------
     float getHealth() const;
 //-------------------------------------------------------

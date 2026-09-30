@@ -1,0 +1,39 @@
+{
+    "Map/SizeTest": {
+        "height": 4300,
+        "width": 2
+    },
+    "activeFile": "C:/Users/Kirin/source/repos/witchs-trial/assets/maps/test.tmx",
+    "expandedProjectPaths": [
+    ],
+    "fileStates": {
+        "C:/Users/Kirin/source/repos/witchs-trial/assets/maps/test.tmx": {
+            "scale": 0.5,
+            "selectedLayer": 1,
+            "viewCenter": {
+                "x": 908,
+                "y": 834
+            }
+        },
+        "C:/Users/Kirin/source/repos/witchs-trial/assets/tilesets/ts_bricks.tsx": {
+            "scaleInDock": 1
+        },
+        "C:/Users/Kirin/source/repos/witchs-trial/assets/tilesets/ts_main.tsx": {
+            "scaleInDock": 1
+        },
+        "C:/Users/Kirin/source/repos/witchs-trial/assets/tilesets/ts_prototype.tsx": {
+            "scaleInDock": 1
+        }
+    },
+    "last.imagePath": "C:/Users/Kirin/source/repos/witchs-trial/assets/tilesets",
+    "map.height": 50,
+    "map.lastUsedFormat": "tmx",
+    "map.width": 50,
+    "openFiles": [
+        "C:/Users/Kirin/source/repos/witchs-trial/assets/maps/test.tmx"
+    ],
+    "project": "test.tiled-project",
+    "recentFiles": [
+        "C:/Users/Kirin/source/repos/witchs-trial/assets/maps/test.tmx"
+    ]
+}

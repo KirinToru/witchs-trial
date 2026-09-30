@@ -4,6 +4,7 @@
 #include <Game/Entities/InteractiveProp2D.hpp>
 #include <Game/Entities/Enemy.hpp>
 #include <Game/Entities/InquisitorFootman.hpp>
+#include <Game/Entities/GrandInquisitor.hpp>
 #include <Game/Entities/Projectile.hpp>
 #include <vector>
 #include <memory>
@@ -46,6 +47,10 @@ public:
 
 //------------[Spawn Inquisitor - Instantiate Concrete Inquisitor Footman Enemy]-------------------
   InquisitorFootman* spawnInquisitor(sf::Vector2f position);
+//-------------------------------------------------------
+
+//------------[Spawn Boss - Instantiate Grand Inquisitor Boss Encounter]-------------------
+  GrandInquisitor* spawnBoss(sf::Vector2f position);
 //-------------------------------------------------------
 
 //------------[Add Enemy - Register Dynamically Allocated Enemy]-------------------
@@ -120,6 +125,10 @@ public:
   std::vector<std::unique_ptr<Enemy>>& getEnemies() { return mEnemies; }
 //-------------------------------------------------------
 
+//------------[Get Boss - Access Spawned Boss Encounter Pointer]-------------------
+  GrandInquisitor* getBoss() const { return mBoss; }
+//-------------------------------------------------------
+
 //------------[Get Entity Count - Query Total Managed Entity Count]-------------------
   size_t getEntityCount() const { return mSpawnedProps.size() + mEnemies.size() + mProjectiles.size(); }
 //-------------------------------------------------------
@@ -129,4 +138,5 @@ private:
   std::vector<std::unique_ptr<sf::Shape>> mSpawnedShapes;
   std::vector<std::unique_ptr<Enemy>> mEnemies;
   std::vector<std::unique_ptr<Projectile>> mProjectiles;
+  GrandInquisitor* mBoss{nullptr};
 };
