@@ -3,6 +3,7 @@
 #include <Game/Systems/ObjectManager.hpp>
 #include <Engine/Physics/PhysicsWorld.hpp>
 #include <Engine/Physics/SweptAABB.hpp>
+#include <Engine/Audio/AudioManager.hpp>
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -301,6 +302,7 @@ void Player::toggleForm(const Physics::PhysicsWorld* physicsWorld) {
     } else {
         setForm(PlayerForm::Witch, physicsWorld);
     }
+    Engine::Audio::AudioManager::getInstance().playSound("assets/audio/transform.wav", 90.f);
 }
 //-------------------------------------------------------
 
@@ -889,6 +891,7 @@ bool Player::takeDamage(float damage, sf::Vector2f knockback) {
 
     mInvulnerableTimer = 0.5f;
     mHurtbox.invulnerable = true;
+    Engine::Audio::AudioManager::getInstance().playSound("assets/audio/player_hurt.wav", 85.f);
     return true;
 }
 //-------------------------------------------------------

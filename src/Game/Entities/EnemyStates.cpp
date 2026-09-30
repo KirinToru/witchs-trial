@@ -80,7 +80,7 @@ void EnemyChaseState::fixedUpdate(Enemy& enemy, float dt, const Player& player, 
 
     if (!hasLoS) {
         mLostLoSTimer += dt;
-        if (mLostLoSTimer >= 2.5f || dist > 550.f) {
+        if (mLostLoSTimer >= 2.5f || dist > enemy.getDetectionRange()) {
             enemy.changeState(EnemyStateType::Idle);
             return;
         }
@@ -103,7 +103,7 @@ void EnemyChaseState::fixedUpdate(Enemy& enemy, float dt, const Player& player, 
     } else {
         // Move towards player
         vel.x = dir * enemy.getMoveSpeed();
-        if (enemy.isGrounded() && !enemy.hasGroundAhead(physicsWorld)) {
+        if (!enemy.isBoss() && enemy.isGrounded() && !enemy.hasGroundAhead(physicsWorld)) {
             vel.x = 0.f;
         }
     }

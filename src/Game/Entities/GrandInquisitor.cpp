@@ -1,6 +1,7 @@
 #include <Game/Entities/GrandInquisitor.hpp>
 #include <Game/Entities/Player.hpp>
 #include <Engine/Physics/PhysicsWorld.hpp>
+#include <Engine/Audio/AudioManager.hpp>
 #include <cmath>
 #include <algorithm>
 
@@ -12,7 +13,7 @@ GrandInquisitor::GrandInquisitor(sf::Vector2f position)
           /*maxPosture=*/140.f,
           /*moveSpeed=*/85.f,
           /*attackRange=*/74.f,
-          /*detectionRange=*/600.f,
+          /*detectionRange=*/3000.f,
           /*telegraphDuration=*/0.85f,
           /*staggerDuration=*/2.0f) {
 
@@ -46,6 +47,7 @@ void GrandInquisitor::startPhaseTransition() {
     sf::Vector2f vel = getVelocity();
     vel.x = 0.f;
     setVelocity(vel);
+    Engine::Audio::AudioManager::getInstance().playSound("assets/audio/boss_roar.wav", 100.f);
 }
 //-------------------------------------------------------
 
@@ -72,6 +74,16 @@ void GrandInquisitor::fixedUpdate(float dt, const Player& player, const Physics:
         if (mShockwaveTimer <= 0.f) {
             mShockwaveActive = false;
         }
+    }
+
+    if (!mEngaged) {
+        sf::Vector2f vel = getVelocity();
+        vel.x = 0.f;
+        vel.y += 980.f * dt;
+        setVelocity(vel);
+        moveWithSweptCCD({0.f, vel.y * dt}, physicsWorld, player.getRigidBody());
+        getAnimator().play("Idle");
+        return;
     }
 
     // Phase transition sequence: Boss roars and gathers power
@@ -102,11 +114,15 @@ void GrandInquisitor::fixedUpdate(float dt, const Player& player, const Physics:
         return;
     }
 
+    if (getCurrentStateType() == EnemyStateType::Idle && !isDead() && !isStaggered()) {
+        changeState(EnemyStateType::Chase);
+    }
+
     EnemyStateType prevState = getCurrentStateType();
 
     Enemy::fixedUpdate(dt, player, physicsWorld);
 
-    if (mEngaged && getCurrentStateType() == EnemyStateType::Idle && !isDead() && !isStaggered()) {
+    if (getCurrentStateType() == EnemyStateType::Idle && !isDead() && !isStaggered()) {
         changeState(EnemyStateType::Chase);
     }
 
@@ -150,6 +166,7 @@ void GrandInquisitor::spawnAttackHitbox() {
         mShockwaveTimer = 0.38f;
         mShockwaveOrigin = mShape.getPosition() + sf::Vector2f(mFacingRight ? size.x : 0.f, size.y);
         mShockwaveFacingDir = mFacingRight ? 1.f : -1.f;
+        Engine::Audio::AudioManager::getInstance().playSound("assets/audio/boss_smash.wav", 95.f);
 
     } else {
         // Phase 2: Chained Multi-Hit Bloodflame Combos
@@ -167,6 +184,7 @@ void GrandInquisitor::spawnAttackHitbox() {
             sf::Vector2f vel = getVelocity();
             vel.x = mFacingRight ? 180.f : -180.f;
             setVelocity(vel);
+            Engine::Audio::AudioManager::getInstance().playSound("assets/audio/boss_slash.wav", 85.f);
 
         } else if (mComboStep == 1) {
             // Combo Step 2: Rising Upward Cleave
@@ -179,6 +197,7 @@ void GrandInquisitor::spawnAttackHitbox() {
             sf::Vector2f vel = getVelocity();
             vel.x = mFacingRight ? 200.f : -200.f;
             setVelocity(vel);
+            Engine::Audio::AudioManager::getInstance().playSound("assets/audio/boss_slash.wav", 90.f);
 
         } else {
             // Combo Step 3: Leaping Bloodflame Ground Slam
@@ -196,6 +215,7 @@ void GrandInquisitor::spawnAttackHitbox() {
             mShockwaveTimer = 0.35f;
             mShockwaveOrigin = mShape.getPosition() + sf::Vector2f(mFacingRight ? size.x : 0.f, size.y);
             mShockwaveFacingDir = mFacingRight ? 1.f : -1.f;
+            Engine::Audio::AudioManager::getInstance().playSound("assets/audio/boss_smash.wav", 100.f);
         }
 
         setAttackHitbox(comboHit);

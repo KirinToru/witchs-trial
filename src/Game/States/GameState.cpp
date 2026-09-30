@@ -1,6 +1,7 @@
 #include <Game/States/GameState.hpp>
 #include <Game/States/PauseState.hpp>
 #include <Game/Game.hpp>
+#include <Engine/Audio/AudioManager.hpp>
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -20,9 +21,17 @@ GameState::GameState(Game *game)
   mBackgroundTexture.setRepeated(true);
   mBackgroundSprite.setTexture(mBackgroundTexture);
 
+  if (mEndFont.openFromFile("assets/fonts/trebuc.ttf")) {
+    mEndFontLoaded = true;
+  } else if (mEndFont.openFromFile("C:/Windows/Fonts/arial.ttf")) {
+    mEndFontLoaded = true;
+  }
+
   mPhysicsWorld.setGravity({0.f, 980.f});
 
   loadLevel("assets/maps/test.tmx");
+
+  Engine::Audio::AudioManager::getInstance().playBGM("assets/audio/bgm_exploration.ogg", true, 50.f);
 }
 //-------------------------------------------------------
 
@@ -100,6 +109,16 @@ void GameState::handleInput(sf::Event &event) {
     if (keyPress->code == sf::Keyboard::Key::F2) {
       mHUD.toggleInfo();
     }
+    if (mGameEndState != GameEndState::None) {
+      if (keyPress->code == sf::Keyboard::Key::R || keyPress->code == sf::Keyboard::Key::Enter) {
+        restartGame();
+        return;
+      }
+    }
+  }
+
+  if (mGameEndState == GameEndState::GameOver) {
+    return;
   }
 
   mPlayer.handleInput(event);
@@ -109,6 +128,21 @@ void GameState::handleInput(sf::Event &event) {
 //------------[Fixed Update - Step Custom Physics & Deterministic Movement (60Hz)]-------------------
 void GameState::fixedUpdate(sf::Time dt) {
   float dtSec = dt.asSeconds();
+
+  if (mPlayer.isDead() && mGameEndState == GameEndState::None) {
+    triggerGameOver();
+  }
+
+  if (mGameEndState == GameEndState::GameOver) {
+    mEndStateTimer += dtSec;
+    mPhysicsWorld.update(dtSec * 0.25f);
+    mPlayer.fixedUpdate(dtSec * 0.25f, mMap, mPhysicsWorld);
+    return;
+  }
+
+  if (mGameEndState == GameEndState::Victory) {
+    mEndStateTimer += dtSec;
+  }
 
   if (mHitStopTimer > 0.f) {
     mHitStopTimer = std::max(0.f, mHitStopTimer - dtSec);
@@ -124,6 +158,7 @@ void GameState::fixedUpdate(sf::Time dt) {
 
   if (mPlayer.consumeGroundSmashImpact()) {
     triggerCameraShake(10.f, 0.4f);
+    Engine::Audio::AudioManager::getInstance().playSound("assets/audio/beast_smash.wav", 95.f);
     Physics::AABB smashAABB = Physics::AABB::fromCenterHalfExtents(
         mPlayer.getPosition() + sf::Vector2f(0.f, 20.f),
         sf::Vector2f(100.f, 50.f)
@@ -152,6 +187,9 @@ void GameState::fixedUpdate(sf::Time dt) {
 
     if (mBoss->isDead()) {
       releaseArenaLock();
+      if (mGameEndState == GameEndState::None) {
+        triggerVictory();
+      }
     } else {
       mHUD.setBossInfo(true, mBoss->getBossName(), mBoss->getHealth(), mBoss->getMaxHealth(),
                        mBoss->getPosture(), mBoss->getMaxPosture(), mBoss->getPhaseNumber());
@@ -191,6 +229,9 @@ void GameState::engageArenaLock() {
     mBoss->engage();
   }
 
+  Engine::Audio::AudioManager::getInstance().playBGM("assets/audio/bgm_boss.ogg", true, 65.f);
+  Engine::Audio::AudioManager::getInstance().playSound("assets/audio/arena_lock.wav", 85.f);
+
   triggerCameraShake(8.f, 0.45f);
   triggerHitStop(0.08f);
 }
@@ -212,6 +253,8 @@ void GameState::releaseArenaLock() {
 
   mArenaTrigger.setCompleted(true);
   mHUD.setBossInfo(false);
+
+  Engine::Audio::AudioManager::getInstance().playSound("assets/audio/boss_defeat.wav", 100.f);
 
   triggerCameraShake(14.f, 0.8f);
   triggerHitStop(0.2f);
@@ -241,12 +284,15 @@ void GameState::resolveCombatCollisions() {
         if (postureBroken) {
           triggerHitStop(0.10f);
           triggerCameraShake(10.f, 0.4f);
+          Engine::Audio::AudioManager::getInstance().playSound("assets/audio/posture_break.wav", 100.f);
         } else if (mPlayer.getForm() == PlayerForm::Beast) {
           triggerHitStop(0.08f);
           triggerCameraShake(6.f, 0.25f);
+          Engine::Audio::AudioManager::getInstance().playSound("assets/audio/enemy_hit.wav", 85.f);
         } else {
           triggerHitStop(0.03f);
           triggerCameraShake(3.f, 0.15f);
+          Engine::Audio::AudioManager::getInstance().playSound("assets/audio/enemy_hit.wav", 80.f);
         }
       }
     }
@@ -260,6 +306,9 @@ void GameState::resolveCombatCollisions() {
         if (destroyed) {
           triggerHitStop(mPlayer.getForm() == PlayerForm::Beast ? 0.08f : 0.03f);
           triggerCameraShake(mPlayer.getForm() == PlayerForm::Beast ? 6.f : 2.f, 0.2f);
+          Engine::Audio::AudioManager::getInstance().playSound("assets/audio/prop_destroy.wav", 80.f);
+        } else {
+          Engine::Audio::AudioManager::getInstance().playSound("assets/audio/prop_hit.wav", 60.f);
         }
       }
     }
@@ -282,9 +331,11 @@ void GameState::resolveCombatCollisions() {
         if (postureBroken) {
           triggerHitStop(0.10f);
           triggerCameraShake(8.f, 0.35f);
+          Engine::Audio::AudioManager::getInstance().playSound("assets/audio/posture_break.wav", 100.f);
         } else {
           triggerHitStop(0.04f);
           triggerCameraShake(3.f, 0.15f);
+          Engine::Audio::AudioManager::getInstance().playSound("assets/audio/magic_impact.wav", 80.f);
         }
         break;
       }
@@ -300,6 +351,7 @@ void GameState::resolveCombatCollisions() {
         if (destroyed) {
           triggerHitStop(0.04f);
           triggerCameraShake(3.f, 0.15f);
+          Engine::Audio::AudioManager::getInstance().playSound("assets/audio/prop_destroy.wav", 80.f);
         }
         break;
       }
@@ -427,5 +479,126 @@ void GameState::render(sf::RenderWindow &window) {
   }
 
   mHUD.render(window);
+  renderEndScreen(window);
+}
+//-------------------------------------------------------
+
+//------------[Trigger Game Over - Initiate Death Screen and Audio Transition]-------------------
+void GameState::triggerGameOver() {
+  if (mGameEndState != GameEndState::None) return;
+  mGameEndState = GameEndState::GameOver;
+  mEndStateTimer = 0.f;
+  triggerHitStop(0.25f);
+  triggerCameraShake(8.f, 0.5f);
+  Engine::Audio::AudioManager::getInstance().stopBGM();
+  Engine::Audio::AudioManager::getInstance().playSound("assets/audio/player_death.wav", 90.f);
+  Engine::Audio::AudioManager::getInstance().playSound("assets/audio/game_over.wav", 100.f);
+}
+//-------------------------------------------------------
+
+//------------[Trigger Victory - Initiate Victory Screen and Audio Celebration]-------------------
+void GameState::triggerVictory() {
+  if (mGameEndState != GameEndState::None) return;
+  mGameEndState = GameEndState::Victory;
+  mEndStateTimer = 0.f;
+  triggerCameraShake(12.f, 0.8f);
+  Engine::Audio::AudioManager::getInstance().stopBGM();
+  Engine::Audio::AudioManager::getInstance().playSound("assets/audio/victory.wav", 100.f);
+}
+//-------------------------------------------------------
+
+//------------[Restart Game - Completely Reset Level State, Player, Enemies and Camera]-------------------
+void GameState::restartGame() {
+  mGameEndState = GameEndState::None;
+  mEndStateTimer = 0.f;
+  mHitStopTimer = 0.f;
+  mShakeTimer = 0.f;
+  loadLevel("assets/maps/test.tmx");
+  Engine::Audio::AudioManager::getInstance().stopAllSounds();
+  Engine::Audio::AudioManager::getInstance().playBGM("assets/audio/bgm_exploration.ogg", true, 50.f);
+  Engine::Audio::AudioManager::getInstance().playSound("assets/audio/restart.wav", 85.f);
+}
+//-------------------------------------------------------
+
+//------------[Render End Screen - Draw Cinematic Dark Red Death or Golden Victory Overlay]-------------------
+void GameState::renderEndScreen(sf::RenderWindow &window) {
+  if (mGameEndState == GameEndState::None) return;
+
+  sf::View defaultView = window.getDefaultView();
+  window.setView(defaultView);
+  sf::Vector2f viewSize = defaultView.getSize();
+
+  float alphaFactor = std::min(1.0f, mEndStateTimer / 1.2f);
+
+  if (mGameEndState == GameEndState::GameOver) {
+    sf::RectangleShape overlay(viewSize);
+    overlay.setFillColor(sf::Color(22, 4, 6, static_cast<std::uint8_t>(alphaFactor * 210.f)));
+    window.draw(overlay);
+
+    sf::RectangleShape topBar({viewSize.x, 80.f});
+    topBar.setFillColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(alphaFactor * 255.f)));
+    window.draw(topBar);
+
+    sf::RectangleShape botBar({viewSize.x, 80.f});
+    botBar.setPosition({0.f, viewSize.y - 80.f});
+    botBar.setFillColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(alphaFactor * 255.f)));
+    window.draw(botBar);
+
+    if (mEndFontLoaded) {
+      sf::Text shadowText(mEndFont, "YOU DIED", 76);
+      shadowText.setFillColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(alphaFactor * 220.f)));
+      sf::FloatRect sBounds = shadowText.getLocalBounds();
+      shadowText.setPosition({(viewSize.x - sBounds.size.x) * 0.5f + 3.f, viewSize.y * 0.5f - 62.f});
+      window.draw(shadowText);
+
+      sf::Text titleText(mEndFont, "YOU DIED", 76);
+      titleText.setFillColor(sf::Color(180, 20, 20, static_cast<std::uint8_t>(alphaFactor * 255.f)));
+      titleText.setOutlineColor(sf::Color(40, 0, 0, static_cast<std::uint8_t>(alphaFactor * 255.f)));
+      titleText.setOutlineThickness(3.f);
+      sf::FloatRect bounds = titleText.getLocalBounds();
+      titleText.setPosition({(viewSize.x - bounds.size.x) * 0.5f, viewSize.y * 0.5f - 65.f});
+      window.draw(titleText);
+    }
+  } else if (mGameEndState == GameEndState::Victory) {
+    sf::RectangleShape overlay(viewSize);
+    overlay.setFillColor(sf::Color(10, 14, 25, static_cast<std::uint8_t>(alphaFactor * 195.f)));
+    window.draw(overlay);
+
+    sf::RectangleShape topBar({viewSize.x, 80.f});
+    topBar.setFillColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(alphaFactor * 255.f)));
+    window.draw(topBar);
+
+    sf::RectangleShape botBar({viewSize.x, 80.f});
+    botBar.setPosition({0.f, viewSize.y - 80.f});
+    botBar.setFillColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(alphaFactor * 255.f)));
+    window.draw(botBar);
+
+    if (mEndFontLoaded) {
+      sf::Text shadowText(mEndFont, "VICTORY ACHIEVED", 62);
+      shadowText.setFillColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(alphaFactor * 220.f)));
+      sf::FloatRect sBounds = shadowText.getLocalBounds();
+      shadowText.setPosition({(viewSize.x - sBounds.size.x) * 0.5f + 3.f, viewSize.y * 0.5f - 57.f});
+      window.draw(shadowText);
+
+      sf::Text titleText(mEndFont, "VICTORY ACHIEVED", 62);
+      titleText.setFillColor(sf::Color(240, 210, 85, static_cast<std::uint8_t>(alphaFactor * 255.f)));
+      titleText.setOutlineColor(sf::Color(50, 40, 10, static_cast<std::uint8_t>(alphaFactor * 255.f)));
+      titleText.setOutlineThickness(3.f);
+      sf::FloatRect bounds = titleText.getLocalBounds();
+      titleText.setPosition({(viewSize.x - bounds.size.x) * 0.5f, viewSize.y * 0.5f - 60.f});
+      window.draw(titleText);
+    }
+  }
+
+  if (mEndFontLoaded && mEndStateTimer > 0.8f) {
+    float promptAlpha = std::min(1.0f, (mEndStateTimer - 0.8f) / 0.6f);
+    sf::Text promptText(mEndFont, "PRESS [R] OR [ENTER] TO RESTART", 20);
+    promptText.setFillColor(sf::Color(220, 220, 220, static_cast<std::uint8_t>(promptAlpha * 240.f)));
+    promptText.setOutlineColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(promptAlpha * 240.f)));
+    promptText.setOutlineThickness(1.5f);
+    sf::FloatRect pBounds = promptText.getLocalBounds();
+    promptText.setPosition({(viewSize.x - pBounds.size.x) * 0.5f, viewSize.y * 0.5f + 70.f});
+    window.draw(promptText);
+  }
 }
 //-------------------------------------------------------

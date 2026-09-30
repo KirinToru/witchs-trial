@@ -42,6 +42,7 @@ set(SOURCES
     "src/Game/Systems/WindSystem.cpp"
     "src/Game/Systems/ObjectManager.cpp"
     "src/Engine/Physics/PhysicsWorld.cpp"
+    "src/Engine/Audio/AudioManager.cpp"
 )
 add_executable(WitchsTrial ${SOURCES})
 

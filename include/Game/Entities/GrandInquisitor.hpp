@@ -71,6 +71,10 @@ public:
     }
 //-------------------------------------------------------
 
+//------------[Is Boss - Override As True For Grand Inquisitor]-------------------
+    bool isBoss() const override { return true; }
+//-------------------------------------------------------
+
 private:
 //------------[Start Phase Transition - Trigger Roar, Invulnerability & Visual Shift]-------------------
     void startPhaseTransition();

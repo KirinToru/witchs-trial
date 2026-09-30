@@ -13,6 +13,12 @@
 #include <Game/Entities/GrandInquisitor.hpp>
 #include <vector>
 
+enum class GameEndState {
+  None,
+  GameOver,
+  Victory
+};
+
 class GameState : public State {
 public:
   GameState(Game *game);
@@ -36,6 +42,18 @@ public:
   void triggerCameraShake(float intensity, float durationSeconds);
 //-------------------------------------------------------
 
+//------------[Trigger Game Over - Initiate Death Screen and Audio Transition]-------------------
+  void triggerGameOver();
+//-------------------------------------------------------
+
+//------------[Trigger Victory - Initiate Victory Screen and Audio Celebration]-------------------
+  void triggerVictory();
+//-------------------------------------------------------
+
+//------------[Restart Game - Completely Reset Level State, Player, Enemies and Camera]-------------------
+  void restartGame();
+//-------------------------------------------------------
+
 private:
   void loadLevel(const std::string &filename);
 
@@ -49,6 +67,10 @@ private:
 
 //------------[Release Arena Lock - Remove Boundary Colliders and Unlock Camera]-------------------
   void releaseArenaLock();
+//-------------------------------------------------------
+
+//------------[Render End Screen - Draw Cinematic Dark Red Death or Golden Victory Overlay]-------------------
+  void renderEndScreen(sf::RenderWindow &window);
 //-------------------------------------------------------
 
   Player mPlayer;
@@ -74,4 +96,9 @@ private:
   Physics::RigidBody* mArenaLeftWall{nullptr};
   Physics::RigidBody* mArenaRightWall{nullptr};
   GrandInquisitor* mBoss{nullptr};
+
+  GameEndState mGameEndState{GameEndState::None};
+  float mEndStateTimer{0.f};
+  sf::Font mEndFont;
+  bool mEndFontLoaded{false};
 };

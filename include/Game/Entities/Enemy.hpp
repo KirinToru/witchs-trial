@@ -214,6 +214,10 @@ public:
     const Engine::Graphics::Animator& getAnimator() const;
 //-------------------------------------------------------
 
+//------------[Is Boss - Check If Entity Is Boss Type]-------------------
+    virtual bool isBoss() const { return false; }
+//-------------------------------------------------------
+
 protected:
 //------------[Protected Constructor - Initialize Enemy Base Properties]-------------------
     Enemy(sf::Vector2f size, float maxHealth, float maxPosture, float moveSpeed,

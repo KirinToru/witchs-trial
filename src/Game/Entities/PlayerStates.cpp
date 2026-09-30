@@ -2,6 +2,7 @@
 #include <Game/Entities/Player.hpp>
 #include <Game/Combat/CombatBoxes.hpp>
 #include <Engine/Physics/PhysicsWorld.hpp>
+#include <Engine/Audio/AudioManager.hpp>
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
 #include <algorithm>
@@ -478,6 +479,7 @@ void PlayerDashState::enter(Player& player) {
 
     player.setDashDirection(dir);
     player.setVelocity({0.f, 0.f});
+    Engine::Audio::AudioManager::getInstance().playSound("assets/audio/player_dash.wav", 75.f);
 }
 //-------------------------------------------------------
 
@@ -586,6 +588,7 @@ void PlayerPounceState::enter(Player& player) {
     pounceBox.localBounds = Physics::AABB::fromPositionSize({-10.f, -5.f}, {player.getBounds().size.x + 20.f, player.getBounds().size.y + 10.f});
     pounceBox.active = true;
     player.setAttackHitbox(pounceBox);
+    Engine::Audio::AudioManager::getInstance().playSound("assets/audio/beast_pounce.wav", 85.f);
 }
 //-------------------------------------------------------
 
@@ -659,6 +662,7 @@ void PlayerMeleeAttackState::enter(Player& player) {
     sf::Vector2f vel = player.getVelocity();
     vel.x = player.isFacingRight() ? 120.f : -120.f;
     player.setVelocity(vel);
+    Engine::Audio::AudioManager::getInstance().playSound("assets/audio/player_slash.wav", 80.f);
 }
 //-------------------------------------------------------
 
@@ -745,6 +749,7 @@ void PlayerHeavyStrikeState::enter(Player& player) {
     sf::Vector2f vel = player.getVelocity();
     vel.x = player.isFacingRight() ? 220.f : -220.f;
     player.setVelocity(vel);
+    Engine::Audio::AudioManager::getInstance().playSound("assets/audio/beast_smash.wav", 90.f);
 }
 //-------------------------------------------------------
 
@@ -886,6 +891,7 @@ void PlayerCastSpellState::fixedUpdate(Player& player, float dt, const Map& map,
             sf::Vector2f projVel = {facingRight ? projSpeed : -projSpeed, 0.f};
 
             player.spawnProjectile({spawnX, spawnY}, projVel, 30.f, 25.f);
+            Engine::Audio::AudioManager::getInstance().playSound("assets/audio/player_cast.wav", 85.f);
         }
     }
 
