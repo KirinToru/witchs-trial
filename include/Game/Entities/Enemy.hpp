@@ -42,7 +42,7 @@ public:
 //-------------------------------------------------------
 
 //------------[Take Damage - Apply Damage, Poise Damage, and Knockback]-------------------
-    virtual void takeDamage(float damage, float poiseDamage, sf::Vector2f knockback);
+    virtual bool takeDamage(float damage, float poiseDamage, sf::Vector2f knockback);
 //-------------------------------------------------------
 
 //------------[Has Line Of Sight - Perform Swept Raycast to Player]-------------------

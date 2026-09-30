@@ -217,6 +217,7 @@ void Player::reset(sf::Vector2f position) {
     mHealth = mMaxHealth;
     mInvulnerableTimer = 0.f;
     mHurtbox.invulnerable = false;
+    mGroundSmashImpact = false;
 
     if (mRigidBody) {
         mRigidBody->setPosition(shape.getPosition());
@@ -963,17 +964,17 @@ void Player::setHealth(float hp) {
 //-------------------------------------------------------
 
 //------------[Take Damage - Apply Damage with Invulnerability Frames and Knockback]-------------------
-void Player::takeDamage(float damage, sf::Vector2f knockback) {
+bool Player::takeDamage(float damage, sf::Vector2f knockback) {
     if (mHurtbox.invulnerable || mInvulnerableTimer > 0.f || isDead()) {
-        return;
+        return false;
     }
 
     mHealth = std::max(0.f, mHealth - damage);
     velocity += knockback;
 
-    // Grant 0.5s of I-frames after taking damage
     mInvulnerableTimer = 0.5f;
     mHurtbox.invulnerable = true;
+    return true;
 }
 //-------------------------------------------------------
 
@@ -1114,6 +1115,20 @@ void Player::setAttackHitbox(const Combat::Hitbox& hitbox) {
 //------------[Deactivate Attack Hitbox - Disable Offensive Attack Box]-------------------
 void Player::deactivateAttackHitbox() {
     mAttackHitbox.active = false;
+}
+//-------------------------------------------------------
+
+//------------[Trigger Ground Smash Impact - Register Ground Smash Landing Impact]-------------------
+void Player::triggerGroundSmashImpact() {
+    mGroundSmashImpact = true;
+}
+//-------------------------------------------------------
+
+//------------[Consume Ground Smash Impact - Query and Reset Ground Smash Landing Impact]-------------------
+bool Player::consumeGroundSmashImpact() {
+    bool impact = mGroundSmashImpact;
+    mGroundSmashImpact = false;
+    return impact;
 }
 //-------------------------------------------------------
 

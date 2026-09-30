@@ -26,14 +26,20 @@ public:
   }
 //-------------------------------------------------------
 
+//------------[Trigger Hit Stop - Pause Simulation Updates for Impact Freeze]-------------------
+  void triggerHitStop(float durationSeconds);
+//-------------------------------------------------------
+
+//------------[Trigger Camera Shake - Apply Screen Shake Trauma]-------------------
+  void triggerCameraShake(float intensity, float durationSeconds);
+//-------------------------------------------------------
+
 private:
   void loadLevel(const std::string &filename);
 
 //------------[Resolve Combat Collisions - Process Player & Enemy Hitbox Overlaps]-------------------
   void resolveCombatCollisions();
 //-------------------------------------------------------
-
-
 
   Player mPlayer;
   Map mMap;
@@ -42,6 +48,12 @@ private:
   std::vector<Enemy*> mHitEnemiesThisSwing;
 
   sf::View mCamera;
+  sf::Vector2f mCameraBaseCenter{0.f, 0.f};
+  float mHitStopTimer{0.f};
+  float mShakeIntensity{0.f};
+  float mShakeDuration{0.f};
+  float mShakeTimer{0.f};
+
   sf::Texture mBackgroundTexture;
   sf::Sprite mBackgroundSprite;
 

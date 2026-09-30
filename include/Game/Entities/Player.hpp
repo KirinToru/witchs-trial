@@ -304,7 +304,7 @@ public:
 //-------------------------------------------------------
 
 //------------[Take Damage - Apply Damage with Invulnerability Frames and Knockback]-------------------
-    void takeDamage(float damage, sf::Vector2f knockback = {0.f, 0.f});
+    bool takeDamage(float damage, sf::Vector2f knockback = {0.f, 0.f});
 //-------------------------------------------------------
 
 //------------[Heal - Restore Health Points]-------------------
@@ -388,6 +388,14 @@ public:
 
 //------------[Deactivate Attack Hitbox - Disable Offensive Attack Box]-------------------
     void deactivateAttackHitbox();
+//-------------------------------------------------------
+
+//------------[Trigger Ground Smash Impact - Register Ground Smash Landing Impact]-------------------
+    void triggerGroundSmashImpact();
+//-------------------------------------------------------
+
+//------------[Consume Ground Smash Impact - Query and Reset Ground Smash Landing Impact]-------------------
+    bool consumeGroundSmashImpact();
 //-------------------------------------------------------
 
 private:
@@ -487,4 +495,5 @@ private:
     bool wasTransformPressed{false};
     float mTransformCooldownTimer{0.f};
     bool mAutoJumpEnabled{false};
+    bool mGroundSmashImpact{false};
 };

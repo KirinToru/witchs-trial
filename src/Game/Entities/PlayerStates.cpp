@@ -551,10 +551,10 @@ void PlayerPounceState::fixedUpdate(Player& player, float dt, const Map& map, co
         player.moveWithSweptCCD(vel * dt, physicsWorld, false);
 
         if (player.getIsGrounded()) {
-            // High-impact ground impact pause
             mSmashRecoveryTimer = 0.12f;
             player.setVelocity({0.f, 0.f});
             player.setCurrentMaxSpeed(player.getMoveSpeed());
+            player.triggerGroundSmashImpact();
         }
     } else {
         // Pounce leap trajectory

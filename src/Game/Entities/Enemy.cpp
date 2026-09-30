@@ -242,13 +242,12 @@ EnemyStateType Enemy::getCurrentStateType() const {
 //-------------------------------------------------------
 
 //------------[Take Damage - Apply Damage, Poise Damage, and Knockback]-------------------
-void Enemy::takeDamage(float damage, float poiseDamage, sf::Vector2f knockback) {
-    if (isDead()) return;
+bool Enemy::takeDamage(float damage, float poiseDamage, sf::Vector2f knockback) {
+    if (isDead()) return false;
 
-    // Vulnerable damage amplifier when staggered
     float actualDamage = damage;
     if (isStaggered()) {
-        actualDamage *= 1.5f; // Critical finisher multiplier
+        actualDamage *= 1.5f;
     }
 
     mHealth -= actualDamage;
@@ -258,17 +257,21 @@ void Enemy::takeDamage(float damage, float poiseDamage, sf::Vector2f knockback) 
     if (mHealth <= 0.f) {
         mHealth = 0.f;
         changeState(EnemyStateType::Dead);
-        return;
+        return false;
     }
 
-    // Deduct posture and delay passive regeneration
+    bool wasStaggered = isStaggered();
+    bool postureBroken = false;
+
     mPosture = std::max(0.f, mPosture - poiseDamage);
     mPostureRegenDelayTimer = 3.5f;
 
-    // Trigger posture break stagger when posture hits 0
-    if (mPosture <= 0.f && !isStaggered()) {
+    if (mPosture <= 0.f && !wasStaggered) {
         changeState(EnemyStateType::Staggered);
+        postureBroken = true;
     }
+
+    return postureBroken;
 }
 //-------------------------------------------------------
 

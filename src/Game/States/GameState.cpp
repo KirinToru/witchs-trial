@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <random>
 #include <sstream>
 
 //------------[Constructor - Initialize Game World & Level Assets]-------------------
@@ -50,7 +51,8 @@ void GameState::loadLevel(const std::string &filename) {
     float camY = (mapH < viewSize.y)
                      ? mapH / 2.f
                      : std::clamp(playerPos.y, viewSize.y / 2.f, mapH - viewSize.y / 2.f);
-    mCamera.setCenter({camX, camY});
+    mCameraBaseCenter = {camX, camY};
+    mCamera.setCenter(mCameraBaseCenter);
   } else {
     std::cerr << "Failed to load level: " << filename << std::endl;
   }
@@ -78,10 +80,20 @@ void GameState::handleInput(sf::Event &event) {
 //------------[Fixed Update - Step Custom Physics & Deterministic Movement (60Hz)]-------------------
 void GameState::fixedUpdate(sf::Time dt) {
   float dtSec = dt.asSeconds();
+
+  if (mHitStopTimer > 0.f) {
+    mHitStopTimer = std::max(0.f, mHitStopTimer - dtSec);
+    return;
+  }
+
   mPhysicsWorld.update(dtSec);
   mPlayer.fixedUpdate(dtSec, mMap, mPhysicsWorld);
   mObjectManager.updateEnemies(dtSec, mPlayer, mPhysicsWorld);
   resolveCombatCollisions();
+
+  if (mPlayer.consumeGroundSmashImpact()) {
+    triggerCameraShake(10.f, 0.4f);
+  }
 }
 //-------------------------------------------------------
 
@@ -91,27 +103,34 @@ void GameState::resolveCombatCollisions() {
   sf::Vector2f playerPos = mPlayer.getPosition();
   auto& enemies = mObjectManager.getEnemies();
 
-  // 1. Reset hit tracking when player is not actively attacking
   if (!playerHitbox.active) {
     mHitEnemiesThisSwing.clear();
   } else {
-    // Check Player Attack Hitbox vs Enemy Hurtboxes
     for (auto& enemy : enemies) {
       if (!enemy || enemy->isDead()) continue;
 
-      // Ensure each enemy is only hit once per attack swing
       if (std::find(mHitEnemiesThisSwing.begin(), mHitEnemiesThisSwing.end(), enemy.get()) != mHitEnemiesThisSwing.end()) {
         continue;
       }
 
       if (Combat::checkOverlap(playerHitbox, playerPos, enemy->getHurtbox(), enemy->getPosition())) {
-        enemy->takeDamage(playerHitbox.damage, playerHitbox.poiseDamage, playerHitbox.knockback);
+        bool postureBroken = enemy->takeDamage(playerHitbox.damage, playerHitbox.poiseDamage, playerHitbox.knockback);
         mHitEnemiesThisSwing.push_back(enemy.get());
+
+        if (postureBroken) {
+          triggerHitStop(0.10f);
+          triggerCameraShake(10.f, 0.4f);
+        } else if (mPlayer.getForm() == PlayerForm::Beast) {
+          triggerHitStop(0.08f);
+          triggerCameraShake(6.f, 0.25f);
+        } else {
+          triggerHitStop(0.03f);
+          triggerCameraShake(3.f, 0.15f);
+        }
       }
     }
   }
 
-  // 2. Check Enemy Attack Hitboxes vs Player Hurtbox
   const auto& playerHurtbox = mPlayer.getHurtbox();
   for (auto& enemy : enemies) {
     if (!enemy || enemy->isDead()) continue;
@@ -119,14 +138,32 @@ void GameState::resolveCombatCollisions() {
     const auto& enemyHitbox = enemy->getAttackHitbox();
     if (enemyHitbox.active) {
       if (Combat::checkOverlap(enemyHitbox, enemy->getPosition(), playerHurtbox, playerPos)) {
-        mPlayer.takeDamage(enemyHitbox.damage, enemyHitbox.knockback);
+        if (mPlayer.takeDamage(enemyHitbox.damage, enemyHitbox.knockback)) {
+          triggerHitStop(0.06f);
+          triggerCameraShake(4.f, 0.2f);
+        }
       }
     }
   }
 }
 //-------------------------------------------------------
 
+//------------[Trigger Hit Stop - Pause Simulation Updates for Impact Freeze]-------------------
+void GameState::triggerHitStop(float durationSeconds) {
+  mHitStopTimer = std::max(mHitStopTimer, durationSeconds);
+}
+//-------------------------------------------------------
 
+//------------[Trigger Camera Shake - Apply Screen Shake Trauma]-------------------
+void GameState::triggerCameraShake(float intensity, float durationSeconds) {
+  float currentRemaining = (mShakeDuration > 0.f) ? (mShakeIntensity * (mShakeTimer / mShakeDuration)) : 0.f;
+  if (intensity >= currentRemaining) {
+    mShakeIntensity = intensity;
+    mShakeDuration = durationSeconds;
+    mShakeTimer = durationSeconds;
+  }
+}
+//-------------------------------------------------------
 
 //------------[Update - Step Camera Tracking & Telemetry]-------------------
 void GameState::update(sf::Time dt) {
@@ -145,7 +182,6 @@ void GameState::update(sf::Time dt) {
 
   sf::Vector2f playerPos = mPlayer.getPosition();
   sf::Vector2f viewSize = mCamera.getSize();
-  sf::Vector2f currentCenter = mCamera.getCenter();
   float mapW = mMap.getWidth();
   float mapH = mMap.getHeight();
 
@@ -157,9 +193,23 @@ void GameState::update(sf::Time dt) {
                       : std::clamp(playerPos.y, viewSize.y / 2.f, mapH - viewSize.y / 2.f);
 
   float lerpSpeed = 5.0f;
-  float newX = currentCenter.x + (targetX - currentCenter.x) * lerpSpeed * dtSec;
-  float newY = currentCenter.y + (targetY - currentCenter.y) * lerpSpeed * dtSec;
-  mCamera.setCenter({std::round(newX), std::round(newY)});
+  mCameraBaseCenter.x += (targetX - mCameraBaseCenter.x) * lerpSpeed * dtSec;
+  mCameraBaseCenter.y += (targetY - mCameraBaseCenter.y) * lerpSpeed * dtSec;
+
+  sf::Vector2f shakeOffset{0.f, 0.f};
+  if (mShakeTimer > 0.f) {
+    mShakeTimer = std::max(0.f, mShakeTimer - dtSec);
+    float progress = (mShakeDuration > 0.f) ? (mShakeTimer / mShakeDuration) : 0.f;
+    float currentIntensity = mShakeIntensity * (progress * progress);
+
+    static std::mt19937 rng(std::random_device{}());
+    std::uniform_real_distribution<float> dist(-1.f, 1.f);
+    shakeOffset.x = dist(rng) * currentIntensity;
+    shakeOffset.y = dist(rng) * currentIntensity;
+  }
+
+  mCamera.setCenter({std::round(mCameraBaseCenter.x + shakeOffset.x),
+                     std::round(mCameraBaseCenter.y + shakeOffset.y)});
 }
 //-------------------------------------------------------
 
