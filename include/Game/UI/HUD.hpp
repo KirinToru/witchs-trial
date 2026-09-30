@@ -20,6 +20,8 @@ public:
   void setPlayerSpeed(float speed);
   void setEntityCount(int count);
   void setFrameTime(float ms);
+  void setPlayerForm(std::string_view form);
+  void setPlayerState(std::string_view state);
 
 private:
   bool mShowHitbox;
@@ -33,4 +35,6 @@ private:
   float mPlayerSpeed;
   int mEntityCount;
   float mFrameTimeMs;
+  std::string mPlayerForm;
+  std::string mPlayerState;
 };

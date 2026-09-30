@@ -31,6 +31,7 @@ void HUD::update(sf::Time dt) {
   }
 }
 
+//------------[Render - Draw Screen-Space Telemetry HUD]-------------------
 void HUD::render(sf::RenderWindow& window) {
   sf::View oldView = window.getView();
   window.setView(window.getDefaultView()); // Draw HUD in screen space
@@ -40,12 +41,13 @@ void HUD::render(sf::RenderWindow& window) {
     ss << "FPS: " << mCurrentFPS << "\n"
        << "Frame Time: " << std::fixed << std::setprecision(2) << mFrameTimeMs << " ms\n"
        << "Entity Count: " << mEntityCount << "\n"
-       << "Speed: " << (int)mPlayerSpeed;
+       << "Speed: " << (int)mPlayerSpeed << " px/s\n"
+       << "Form: " << mPlayerForm << " (Q to toggle)\n"
+       << "State: " << mPlayerState;
        
     sf::Text infoText(mFPSFont, ss.str(), 16);
     infoText.setFillColor(sf::Color::Yellow);
     
-    // Optional: Add shadow/outline for readability
     infoText.setOutlineColor(sf::Color::Black);
     infoText.setOutlineThickness(1.f);
     
@@ -55,6 +57,7 @@ void HUD::render(sf::RenderWindow& window) {
 
   window.setView(oldView);
 }
+//-------------------------------------------------------
 
 void HUD::toggleHitbox() {
   mShowHitbox = !mShowHitbox;
@@ -83,3 +86,15 @@ void HUD::setEntityCount(int count) {
 void HUD::setFrameTime(float ms) {
   mFrameTimeMs = ms;
 }
+
+//------------[Set Player Form - Update Displayed Dual Form]-------------------
+void HUD::setPlayerForm(std::string_view form) {
+  mPlayerForm = form;
+}
+//-------------------------------------------------------
+
+//------------[Set Player State - Update Displayed FSM State]-------------------
+void HUD::setPlayerState(std::string_view state) {
+  mPlayerState = state;
+}
+//-------------------------------------------------------

@@ -6,15 +6,10 @@
 
 const sf::Time Game::TimePerFrame = sf::seconds(1.f / 60.f);
 
-//------------[Constructor - Initialize Window, Console, and Initial State]-------------------
+//------------[Constructor - Initialize Window, Display Settings, and Initial State]-------------------
 Game::Game() : mWindow(sf::VideoMode({1280, 720}), "Witch's Trial") {
   mWindow.setFramerateLimit(60);
   mWindow.setVerticalSyncEnabled(true);
-  
-  if (!mConsoleFont.openFromFile("assets/fonts/trebuc.ttf")) {
-    std::cerr << "Failed to load font for DevConsole!" << std::endl;
-  }
-  mConsole.init(mConsoleFont);
   
   mStates.push_back(std::make_unique<MenuState>(this));
 }
@@ -109,27 +104,10 @@ void Game::processEvents() {
           mWindow.close();
         else
           cycleWindowMode();
-      } else if (keyPress->code == sf::Keyboard::Key::Grave) {
-        mConsole.toggle();
-        if (mConsole.isOpen()) {
-            if (!mStates.empty() && dynamic_cast<GameState*>(mStates.back().get())) {
-                pushState(std::make_unique<PauseState>(this));
-                mConsoleOpenedFromGame = true;
-            } else {
-                mConsoleOpenedFromGame = false;
-            }
-        } else {
-            if (mConsoleOpenedFromGame && !mStates.empty() && dynamic_cast<PauseState*>(mStates.back().get())) {
-                popState();
-            }
-            mConsoleOpenedFromGame = false;
-        }
       }
     }
     
-    if (mConsole.isOpen()) {
-        mConsole.handleEvent(*event, mWindow);
-    } else if (!mStates.empty()) {
+    if (!mStates.empty()) {
       sf::Event ev = *event;
       mStates.back()->handleInput(ev);
     }
@@ -150,10 +128,6 @@ void Game::update(sf::Time dt) {
   if (!mStates.empty()) {
     mStates.back()->update(dt);
   }
-    
-  if (mConsole.isOpen()) {
-    mConsole.update(dt.asSeconds());
-  }
 }
 //-------------------------------------------------------
 
@@ -162,7 +136,6 @@ void Game::render() {
   mWindow.clear(sf::Color::Black);
   for (const auto &state : mStates)
     state->render(mWindow);
-  if (mConsole.isOpen()) mConsole.render(mWindow);
   mWindow.display();
 }
 //-------------------------------------------------------

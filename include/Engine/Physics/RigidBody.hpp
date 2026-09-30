@@ -132,6 +132,12 @@ public:
     }
 //-------------------------------------------------------
 
+//------------[Set Inverse Mass - Directly Override Inverse Mass Parameter]-------------------
+    void setInverseMass(float invMass) {
+        mInvMass = invMass >= 0.f ? invMass : 0.f;
+    }
+//-------------------------------------------------------
+
 //------------[Get Restitution - Query Coefficient of Restitution]-------------------
     float getRestitution() const {
         return mRestitution;
@@ -223,7 +229,7 @@ public:
 private:
 //------------[Update Inverse Mass - Cache 1.0 / Mass Based on Body Type]-------------------
     void updateInverseMass() {
-        if (mType == BodyType::Dynamic && mMass > 0.f) {
+        if (mMass > 0.f && (mType == BodyType::Dynamic || mType == BodyType::Kinematic)) {
             mInvMass = 1.0f / mMass;
         } else {
             mInvMass = 0.0f;

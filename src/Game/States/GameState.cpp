@@ -22,73 +22,6 @@ GameState::GameState(Game *game)
   mPhysicsWorld.setGravity({0.f, 980.f});
 
   loadLevel("assets/maps/test.tmx");
-
-  mGame->getConsole().setCommandCallback([this](const std::string &commandLine) {
-    std::istringstream iss(commandLine);
-    std::string cmd;
-    iss >> cmd;
-
-    if (cmd == "gravity") {
-      float gx, gy;
-      if (iss >> gx >> gy) {
-        mPhysicsWorld.setGravity({gx, gy});
-        mGame->getConsole().addLog("Gravity set to " + std::to_string(gx) + ", " + std::to_string(gy));
-      } else {
-        mGame->getConsole().addLog("Usage: gravity <x> <y>");
-      }
-    } else if (cmd == "autojump") {
-      int val;
-      if (iss >> val) {
-        mPlayer.setAutoJump(val != 0);
-        mGame->getConsole().addLog("Autojump set to " + std::to_string(val != 0));
-      } else {
-        mGame->getConsole().addLog("Usage: autojump <0|1>");
-      }
-    } else if (cmd == "info") {
-      int val;
-      if (iss >> val) {
-        if ((val != 0) != mHUD.isInfoVisible())
-          mHUD.toggleInfo();
-        mGame->getConsole().addLog("Info display set to " + std::to_string(val != 0));
-      } else {
-        mGame->getConsole().addLog("Usage: info <0|1>");
-      }
-    } else if (cmd == "hitbox") {
-      int val;
-      if (iss >> val) {
-        if ((val != 0) != mHUD.isHitboxVisible())
-          mHUD.toggleHitbox();
-        mGame->getConsole().addLog("Hitboxes set to " + std::to_string(val != 0));
-      } else {
-        mGame->getConsole().addLog("Usage: hitbox <0|1>");
-      }
-    } else if (cmd == "respawn") {
-      mPlayer.reset(mMap.getStartPosition());
-      mGame->getConsole().addLog("Player respawned at start position.");
-    } else if (cmd == "tp") {
-      float tx, ty;
-      if (iss >> tx >> ty) {
-        mPlayer.reset({tx, ty});
-        mGame->getConsole().addLog("Player teleported to " + std::to_string(tx) + ", " + std::to_string(ty));
-      } else {
-        mGame->getConsole().addLog("Usage: tp <x> <y>");
-      }
-    } else if (cmd == "clear") {
-      mGame->getConsole().clearLog();
-    } else if (cmd == "help") {
-      mGame->getConsole().addLog("Available commands:");
-      mGame->getConsole().addLog("  help           - Show this help message");
-      mGame->getConsole().addLog("  clear          - Clear the console history");
-      mGame->getConsole().addLog("  gravity <x> <y>- Set physics gravity vector");
-      mGame->getConsole().addLog("  autojump <0|1> - Toggle auto-bunnyhop");
-      mGame->getConsole().addLog("  info <0|1>     - Toggle telemetry HUD overlay");
-      mGame->getConsole().addLog("  hitbox <0|1>   - Toggle hitbox debug rendering");
-      mGame->getConsole().addLog("  respawn        - Reset player to start position");
-      mGame->getConsole().addLog("  tp <x> <y>     - Teleport player to coordinates");
-    } else {
-      mGame->getConsole().addLog("Unknown command: " + cmd);
-    }
-  });
 }
 //-------------------------------------------------------
 
@@ -96,6 +29,7 @@ GameState::GameState(Game *game)
 void GameState::loadLevel(const std::string &filename) {
   mPhysicsWorld.clear();
   if (mMap.loadFromFile(filename, &mPhysicsWorld)) {
+    mPlayer.initPhysics(mPhysicsWorld);
     mPlayer.reset(mMap.getStartPosition());
     sf::Vector2f playerPos = mPlayer.getPosition();
     sf::Vector2f viewSize = mCamera.getSize();
@@ -128,16 +62,16 @@ void GameState::handleInput(sf::Event &event) {
       mHUD.toggleInfo();
     }
   }
+
+  mPlayer.handleInput(event);
 }
 //-------------------------------------------------------
 
 //------------[Fixed Update - Step Custom Physics & Deterministic Movement (60Hz)]-------------------
 void GameState::fixedUpdate(sf::Time dt) {
   float dtSec = dt.asSeconds();
-  if (!mGame->getConsole().isOpen()) {
-    mPhysicsWorld.update(dtSec);
-    mPlayer.update(dtSec, mMap, mPhysicsWorld);
-  }
+  mPhysicsWorld.update(dtSec);
+  mPlayer.fixedUpdate(dtSec, mMap, mPhysicsWorld);
 }
 //-------------------------------------------------------
 
@@ -147,7 +81,9 @@ void GameState::update(sf::Time dt) {
 
   sf::Vector2f vel = mPlayer.getVelocity();
   mHUD.setPlayerSpeed(std::abs(vel.x));
-  mHUD.setEntityCount(static_cast<int>(mPhysicsWorld.getBodies().size()) + 1);
+  mHUD.setEntityCount(static_cast<int>(mPhysicsWorld.getBodies().size()));
+  mHUD.setPlayerForm(mPlayer.getForm() == PlayerForm::Witch ? "Witch" : "Beast");
+  mHUD.setPlayerState(mPlayer.getStateName());
   mHUD.update(dt);
 
   sf::Vector2f playerPos = mPlayer.getPosition();

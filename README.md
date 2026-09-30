@@ -27,6 +27,11 @@
   - Wall sliding, fast wall sliding, and wall jumping.
   - Coyote time and jump input buffering for tight game feel.
   - Upward ceiling corner correction to prevent snagging on edges.
+- **Finite State Machine (FSM) & Dual-Form Transformation:**
+  - Modular state machine architecture (`Idle`, `Run`, `Airborne`, `Dash`, `Pounce`).
+  - **Witch Form (Human):** High agility, standard physics mass (1.0 kg), 8-way directional Air-Dash.
+  - **Beast Form (Werewolf):** Heavy physics mass (3.5 kg) with high momentum inheritance, larger AABB extents, and heavy **Pounce** or vertical **Ground Smash**.
+  - Dynamic physics recalculation of mass, inverse mass, and AABB bounds registered in `PhysicsWorld`.
 - **Multi-directional Dash & Air Dash:** Cardinal directional dashes with a brief freeze phase and preserved horizontal momentum.
 - **Tiled Map Integration:** TMX map loading with AABB wall collisions and one-way platforms (drop-through supported).
 - **Developer Tooling:** Built-in dev console (`~`), telemetry HUD (FPS, frame times, speed), and debug hitbox visualization (`F1`).
@@ -38,7 +43,9 @@
 | Move Left | `A` | `Left Arrow` |
 | Move Right | `D` | `Right Arrow` |
 | Jump / Wall Jump | `Space` | |
-| Dash / Air Dash | `Left Shift` | |
+| Dash / Air Dash (Witch) | `Left Shift` | |
+| Pounce / Ground Smash (Beast) | `Left Shift` | `S` + `Left Shift` (in air) |
+| Transform (Witch / Beast) | `Q` | |
 | Fast Slide / Drop Platform | `S` | `Down Arrow` |
 | Toggle Dev Console | `~` (Grave) | |
 | Toggle Hitboxes | `F1` | |

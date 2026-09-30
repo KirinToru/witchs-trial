@@ -4,7 +4,6 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Window.hpp>
 #include <SFML/Window/Context.hpp>
-#include <Game/UI/DevConsole.hpp>
 #include <memory>
 #include <vector>
 
@@ -28,10 +27,6 @@ public:
 //-------------------------------------------------------
 
   void cycleWindowMode();
-  
-//------------[Get Console - Access DevConsole Instance]-------------------
-  DevConsole& getConsole() { return mConsole; }
-//-------------------------------------------------------
 
 private:
   void processEvents();
@@ -43,9 +38,6 @@ private:
 
   sf::RenderWindow mWindow;
   sf::Context mContext;
-  DevConsole mConsole;
-  bool mConsoleOpenedFromGame = false;
-  sf::Font mConsoleFont;
   std::vector<std::unique_ptr<State>> mStates;
 
   static const sf::Time TimePerFrame;
