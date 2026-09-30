@@ -293,8 +293,11 @@ bool Enemy::hasLineOfSightToPlayer(const Player& player, const Physics::PhysicsW
     sf::Vector2f displacement = playerCenter - enemyCenter;
     Physics::AABB probe = Physics::AABB::fromPositionSize(enemyCenter - sf::Vector2f(2.f, 2.f), {4.f, 4.f});
 
-    Physics::SweptHit hit = physicsWorld.sweepTest(probe, displacement, nullptr, false);
-    return (!hit.hit || hit.toi >= 0.98f);
+    Physics::SweptHit hit = physicsWorld.sweepTest(probe, displacement, player.getRigidBody(), false);
+    if (hit.hit && hit.toi < 0.99f && hit.body && hit.body->getType() == Physics::BodyType::Static && !hit.body->isOneWay()) {
+        return false;
+    }
+    return true;
 }
 //-------------------------------------------------------
 

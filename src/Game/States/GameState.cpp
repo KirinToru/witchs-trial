@@ -29,11 +29,12 @@ GameState::GameState(Game *game)
 //------------[Load Level - Load TMX Map and Center Camera]-------------------
 void GameState::loadLevel(const std::string &filename) {
   mPhysicsWorld.clear();
-  mObjectManager.clearEnemies();
+  mObjectManager.clear();
   mHitEnemiesThisSwing.clear();
 
   if (mMap.loadFromFile(filename, &mPhysicsWorld)) {
     mPlayer.initPhysics(mPhysicsWorld);
+    mPlayer.setObjectManager(&mObjectManager);
     mPlayer.reset(mMap.getStartPosition());
     sf::Vector2f playerPos = mPlayer.getPosition();
     sf::Vector2f viewSize = mCamera.getSize();
@@ -42,8 +43,15 @@ void GameState::loadLevel(const std::string &filename) {
 
     // Spawn Inquisitor Footmen on open terrain ahead of player start (avoiding column colliders)
     sf::Vector2f startPos = mMap.getStartPosition();
-    mObjectManager.spawnInquisitor({startPos.x + 110.f, startPos.y - 10.f});
+    mObjectManager.spawnInquisitor({startPos.x + 160.f, startPos.y - 10.f});
     mObjectManager.spawnInquisitor({startPos.x + 400.f, startPos.y - 10.f});
+
+    // Spawn destructible environmental props (crates & barrels) for beast destruction
+    mObjectManager.spawnCrate({startPos.x + 70.f, startPos.y});
+    mObjectManager.spawnCrate({startPos.x + 115.f, startPos.y});
+    mObjectManager.spawnBarrel({startPos.x + 300.f, startPos.y});
+    mObjectManager.spawnCrate({startPos.x + 345.f, startPos.y});
+    mObjectManager.settleProps(mPhysicsWorld);
 
     float camX = (mapW < viewSize.x)
                      ? mapW / 2.f
@@ -89,10 +97,22 @@ void GameState::fixedUpdate(sf::Time dt) {
   mPhysicsWorld.update(dtSec);
   mPlayer.fixedUpdate(dtSec, mMap, mPhysicsWorld);
   mObjectManager.updateEnemies(dtSec, mPlayer, mPhysicsWorld);
+  mObjectManager.updateProjectiles(dtSec, mPhysicsWorld);
   resolveCombatCollisions();
+  mObjectManager.cleanupDestroyed();
 
   if (mPlayer.consumeGroundSmashImpact()) {
     triggerCameraShake(10.f, 0.4f);
+    Physics::AABB smashAABB = Physics::AABB::fromCenterHalfExtents(
+        mPlayer.getPosition() + sf::Vector2f(0.f, 20.f),
+        sf::Vector2f(100.f, 50.f)
+    );
+    for (auto& prop : mObjectManager.getProps()) {
+      if (!prop || prop->isDestroyed() || !prop->isDestructible()) continue;
+      if (smashAABB.intersects(prop->getAABB())) {
+        prop->takeDamage(200.f);
+      }
+    }
   }
 }
 //-------------------------------------------------------
@@ -127,6 +147,60 @@ void GameState::resolveCombatCollisions() {
           triggerHitStop(0.03f);
           triggerCameraShake(3.f, 0.15f);
         }
+      }
+    }
+
+    Physics::AABB playerHitAABB = playerHitbox.getWorldAABB(playerPos);
+    for (auto& prop : mObjectManager.getProps()) {
+      if (!prop || prop->isDestroyed() || !prop->isDestructible()) continue;
+      if (playerHitAABB.intersects(prop->getAABB())) {
+        float dmg = (mPlayer.getForm() == PlayerForm::Beast) ? 120.f : 25.f;
+        bool destroyed = prop->takeDamage(dmg);
+        if (destroyed) {
+          triggerHitStop(mPlayer.getForm() == PlayerForm::Beast ? 0.08f : 0.03f);
+          triggerCameraShake(mPlayer.getForm() == PlayerForm::Beast ? 6.f : 2.f, 0.2f);
+        }
+      }
+    }
+  }
+
+  auto& projectiles = mObjectManager.getProjectiles();
+  for (auto& proj : projectiles) {
+    if (!proj || proj->isDead()) continue;
+    const auto& projHitbox = proj->getHitbox();
+    sf::Vector2f projPos = proj->getPosition();
+
+    bool hitTarget = false;
+    for (auto& enemy : enemies) {
+      if (!enemy || enemy->isDead()) continue;
+      if (Combat::checkOverlap(projHitbox, projPos, enemy->getHurtbox(), enemy->getPosition())) {
+        bool postureBroken = enemy->takeDamage(proj->getDamage(), proj->getPoiseDamage(), proj->getKnockback());
+        proj->destroy();
+        hitTarget = true;
+
+        if (postureBroken) {
+          triggerHitStop(0.10f);
+          triggerCameraShake(8.f, 0.35f);
+        } else {
+          triggerHitStop(0.04f);
+          triggerCameraShake(3.f, 0.15f);
+        }
+        break;
+      }
+    }
+
+    if (hitTarget) continue;
+
+    for (auto& prop : mObjectManager.getProps()) {
+      if (!prop || prop->isDestroyed() || !prop->isDestructible()) continue;
+      if (proj->getAABB().intersects(prop->getAABB())) {
+        bool destroyed = prop->takeDamage(proj->getDamage());
+        proj->destroy();
+        if (destroyed) {
+          triggerHitStop(0.04f);
+          triggerCameraShake(3.f, 0.15f);
+        }
+        break;
       }
     }
   }
@@ -234,7 +308,9 @@ void GameState::render(sf::RenderWindow &window) {
 
   window.draw(mBackgroundSprite);
   mMap.render(window, mPlayer.getPosition(), mHUD.isHitboxVisible());
+  mObjectManager.render(window);
   mObjectManager.renderEnemies(window, mHUD.isHitboxVisible());
+  mObjectManager.renderProjectiles(window, mHUD.isHitboxVisible());
   mPlayer.render(window, mHUD.isHitboxVisible());
 
   if (mHUD.isHitboxVisible()) {

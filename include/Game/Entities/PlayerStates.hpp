@@ -219,3 +219,38 @@ private:
     bool mHitboxDeactivated{false};
 };
 
+class PlayerCastSpellState : public PlayerState {
+public:
+//------------[Virtual Destructor - Cast Spell State Cleanup]-------------------
+    ~PlayerCastSpellState() override = default;
+//-------------------------------------------------------
+
+//------------[Enter - Initialize Witch Spell Cast]-------------------
+    void enter(Player& player) override;
+//-------------------------------------------------------
+
+//------------[Exit - Reset Spell Casting Flags]-------------------
+    void exit(Player& player) override;
+//-------------------------------------------------------
+
+//------------[Handle Input - Process Spell Key Events]-------------------
+    void handleInput(Player& player, const sf::Event& event) override;
+//-------------------------------------------------------
+
+//------------[Fixed Update - Step Spell Cast Animation, Mana Consumption & Projectile Spawn]-------------------
+    void fixedUpdate(Player& player, float dt, const Map& map, const Physics::PhysicsWorld& physicsWorld) override;
+//-------------------------------------------------------
+
+//------------[Get Name - Return Cast Spell State Name]-------------------
+    std::string_view getName() const override { return "CastSpell"; }
+//-------------------------------------------------------
+
+//------------[Get Type - Return Cast Spell State Type]-------------------
+    PlayerStateType getType() const override { return PlayerStateType::CastSpell; }
+//-------------------------------------------------------
+
+private:
+    float mCastTimer{0.f};
+    bool mProjectileSpawned{false};
+};
+

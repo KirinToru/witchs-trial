@@ -1,5 +1,6 @@
 #include <Game/Entities/Player.hpp>
 #include <Game/World/Map.hpp>
+#include <Game/Systems/ObjectManager.hpp>
 #include <Engine/Physics/PhysicsWorld.hpp>
 #include <Engine/Physics/SweptAABB.hpp>
 #include <algorithm>
@@ -26,6 +27,7 @@ Player::Player()
     mAnimator.addAnimation(Engine::Graphics::Animation("Fall", 5, 0, 2, {32, 32}, 0.12f, true));
     mAnimator.addAnimation(Engine::Graphics::Animation("Attack", 5, 0, 4, {32, 32}, 0.08f, false));
     mAnimator.addAnimation(Engine::Graphics::Animation("HeavyStrike", 2, 0, 4, {32, 32}, 0.11f, false));
+    mAnimator.addAnimation(Engine::Graphics::Animation("CastSpell", 5, 0, 4, {32, 32}, 0.09f, false));
     mAnimator.play("Idle");
 
     // Instantiate concrete states
@@ -36,6 +38,7 @@ Player::Player()
     mPounceState = std::make_unique<PlayerPounceState>();
     mMeleeAttackState = std::make_unique<PlayerMeleeAttackState>();
     mHeavyStrikeState = std::make_unique<PlayerHeavyStrikeState>();
+    mCastSpellState = std::make_unique<PlayerCastSpellState>();
 
     // Set initial active state
     mCurrentState = mIdleState.get();
@@ -144,6 +147,10 @@ void Player::fixedUpdate(float dt, const Map& map, const Physics::PhysicsWorld& 
         mStaminaRegenDelayTimer -= dt;
     } else if (mStamina < mMaxStamina) {
         mStamina = std::min(mMaxStamina, mStamina + mStaminaRegenRate * dt);
+    }
+
+    if (mForm == PlayerForm::Witch && mMana < mMaxMana) {
+        mMana = std::min(mMaxMana, mMana + 15.f * dt);
     }
 
     if (mRageDecayDelayTimer > 0.f) {
@@ -328,6 +335,9 @@ void Player::changeState(PlayerStateType newType) {
             break;
         case PlayerStateType::HeavyStrike:
             mCurrentState = mHeavyStrikeState.get();
+            break;
+        case PlayerStateType::CastSpell:
+            mCurrentState = mCastSpellState.get();
             break;
     }
 
@@ -1046,6 +1056,26 @@ Engine::Graphics::Animator& Player::getAnimator() {
 //------------[Get Animator Const - Access Character Animator Const]-------------------
 const Engine::Graphics::Animator& Player::getAnimator() const {
     return mAnimator;
+}
+//-------------------------------------------------------
+
+//------------[Set Object Manager - Assign Object Manager For Entity Spawning]-------------------
+void Player::setObjectManager(ObjectManager* objectManager) {
+    mObjectManager = objectManager;
+}
+//-------------------------------------------------------
+
+//------------[Get Object Manager - Access Object Manager]-------------------
+ObjectManager* Player::getObjectManager() const {
+    return mObjectManager;
+}
+//-------------------------------------------------------
+
+//------------[Spawn Projectile - Dispatch Projectile Creation to Object Manager]-------------------
+void Player::spawnProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage, float poiseDamage) {
+    if (mObjectManager) {
+        mObjectManager->spawnProjectile(position, velocity, damage, poiseDamage);
+    }
 }
 //-------------------------------------------------------
 

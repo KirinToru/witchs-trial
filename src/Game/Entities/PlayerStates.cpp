@@ -84,9 +84,24 @@ void PlayerIdleState::fixedUpdate(Player& player, float dt, const Map& map, cons
         }
     }
 
-    // Horizontal movement input
+    // Horizontal movement input & facing direction
     bool left = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A);
     bool right = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
+    if (left && !right) {
+        player.setFacingRight(false);
+    } else if (right && !left) {
+        player.setFacingRight(true);
+    }
+
+    // Witch ranged spell cast action
+    bool castPressed = sf::Mouse::isButtonPressed(sf::Mouse::Button::Right) ||
+                       sf::Keyboard::isKeyPressed(sf::Keyboard::Key::E) ||
+                       sf::Keyboard::isKeyPressed(sf::Keyboard::Key::K);
+    if (castPressed && player.getForm() == PlayerForm::Witch && player.hasMana(25.f)) {
+        player.changeState(PlayerStateType::CastSpell);
+        return;
+    }
+
     if (left != right) {
         player.changeState(PlayerStateType::Run);
         return;
@@ -176,11 +191,24 @@ void PlayerRunState::fixedUpdate(Player& player, float dt, const Map& map, const
     bool right = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
 
     if (left && !right) {
-        vel.x -= player.getAcceleration() * dt;
         player.setFacingRight(false);
     } else if (right && !left) {
-        vel.x += player.getAcceleration() * dt;
         player.setFacingRight(true);
+    }
+
+    // Witch ranged spell cast action
+    bool castPressed = sf::Mouse::isButtonPressed(sf::Mouse::Button::Right) ||
+                       sf::Keyboard::isKeyPressed(sf::Keyboard::Key::E) ||
+                       sf::Keyboard::isKeyPressed(sf::Keyboard::Key::K);
+    if (castPressed && player.getForm() == PlayerForm::Witch && player.hasMana(25.f)) {
+        player.changeState(PlayerStateType::CastSpell);
+        return;
+    }
+
+    if (left && !right) {
+        vel.x -= player.getAcceleration() * dt;
+    } else if (right && !left) {
+        vel.x += player.getAcceleration() * dt;
     } else {
         // No horizontal input, apply ground friction
         if (vel.x > 0.f) {
@@ -279,14 +307,27 @@ void PlayerAirborneState::fixedUpdate(Player& player, float dt, const Map& map, 
     bool down = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S);
     bool jumpPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space);
 
+    if (left && !right) {
+        player.setFacingRight(false);
+    } else if (right && !left) {
+        player.setFacingRight(true);
+    }
+
+    // Witch ranged spell cast action in air
+    bool castPressed = sf::Mouse::isButtonPressed(sf::Mouse::Button::Right) ||
+                       sf::Keyboard::isKeyPressed(sf::Keyboard::Key::E) ||
+                       sf::Keyboard::isKeyPressed(sf::Keyboard::Key::K);
+    if (castPressed && player.getForm() == PlayerForm::Witch && player.hasMana(25.f)) {
+        player.changeState(PlayerStateType::CastSpell);
+        return;
+    }
+
     // Horizontal air control (with slightly reduced air acceleration)
     float airAccel = player.getAcceleration() * 0.75f;
     if (left && !right) {
         vel.x -= airAccel * dt;
-        player.setFacingRight(false);
     } else if (right && !left) {
         vel.x += airAccel * dt;
-        player.setFacingRight(true);
     }
 
     float maxSpd = player.getCurrentMaxSpeed();
@@ -537,11 +578,20 @@ void PlayerPounceState::enter(Player& player) {
     } else {
         player.getAnimator().play("Jump");
     }
+
+    Combat::Hitbox pounceBox;
+    pounceBox.damage = mIsGroundSmash ? 60.f : 40.f;
+    pounceBox.poiseDamage = mIsGroundSmash ? 70.f : 40.f;
+    pounceBox.knockback = mIsGroundSmash ? sf::Vector2f(0.f, 200.f) : (player.isFacingRight() ? sf::Vector2f(300.f, -120.f) : sf::Vector2f(-300.f, -120.f));
+    pounceBox.localBounds = Physics::AABB::fromPositionSize({-10.f, -5.f}, {player.getBounds().size.x + 20.f, player.getBounds().size.y + 10.f});
+    pounceBox.active = true;
+    player.setAttackHitbox(pounceBox);
 }
 //-------------------------------------------------------
 
 //------------[Exit - Restore Normal Physics & Retain Beast Momentum]-------------------
 void PlayerPounceState::exit(Player& player) {
+    player.deactivateAttackHitbox();
     player.setIsDashing(false);
     mIsGroundSmash = false;
     mSmashRecoveryTimer = 0.f;
@@ -754,6 +804,92 @@ void PlayerHeavyStrikeState::fixedUpdate(Player& player, float dt, const Map& ma
     }
 
     if (player.getAnimator().isFinished() || mAttackTimer >= 0.46f) {
+        if (player.getIsGrounded()) {
+            player.changeState(PlayerStateType::Idle);
+        } else {
+            player.changeState(PlayerStateType::Airborne);
+        }
+    }
+}
+//-------------------------------------------------------
+
+//=============================================================================
+// PlayerCastSpellState (Witch Form Ranged Magic)
+//=============================================================================
+
+//------------[Enter - Initialize Witch Spell Cast]-------------------
+void PlayerCastSpellState::enter(Player& player) {
+    mCastTimer = 0.f;
+    mProjectileSpawned = false;
+    player.deactivateAttackHitbox();
+    player.getAnimator().play("CastSpell", true);
+
+    sf::Vector2f vel = player.getVelocity();
+    vel.x *= 0.5f;
+    player.setVelocity(vel);
+}
+//-------------------------------------------------------
+
+//------------[Exit - Reset Spell Casting Flags]-------------------
+void PlayerCastSpellState::exit(Player& player) {
+    mProjectileSpawned = false;
+}
+//-------------------------------------------------------
+
+//------------[Handle Input - Process Spell Key Events]-------------------
+void PlayerCastSpellState::handleInput(Player& player, const sf::Event& event) {
+    (void)player;
+    (void)event;
+}
+//-------------------------------------------------------
+
+//------------[Fixed Update - Step Spell Cast Animation, Mana Consumption & Projectile Spawn]-------------------
+void PlayerCastSpellState::fixedUpdate(Player& player, float dt, const Map& map, const Physics::PhysicsWorld& physicsWorld) {
+    (void)map;
+    mCastTimer += dt;
+
+    bool left = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A);
+    bool right = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
+    if (!mProjectileSpawned) {
+        if (left && !right) {
+            player.setFacingRight(false);
+        } else if (right && !left) {
+            player.setFacingRight(true);
+        }
+    }
+
+    sf::Vector2f vel = player.getVelocity();
+    if (player.getIsGrounded()) {
+        if (vel.x > 0.f) {
+            vel.x -= player.getFriction() * 2.0f * dt;
+            if (vel.x < 0.f) vel.x = 0.f;
+        } else if (vel.x < 0.f) {
+            vel.x += player.getFriction() * 2.0f * dt;
+            if (vel.x > 0.f) vel.x = 0.f;
+        }
+    } else {
+        vel.y += player.getGravity() * dt;
+    }
+    player.setVelocity(vel);
+    player.moveWithSweptCCD(vel * dt, physicsWorld, false);
+
+    std::size_t frame = player.getAnimator().getCurrentFrame();
+    if (frame >= 2 && !mProjectileSpawned) {
+        mProjectileSpawned = true;
+        if (player.consumeMana(25.f)) {
+            sf::Vector2f pPos = player.getPosition();
+            sf::FloatRect bounds = player.getBounds();
+            bool facingRight = player.isFacingRight();
+            float spawnX = facingRight ? (pPos.x + bounds.size.x + 12.f) : (pPos.x - 12.f);
+            float spawnY = pPos.y + bounds.size.y * 0.45f;
+            float projSpeed = 650.f;
+            sf::Vector2f projVel = {facingRight ? projSpeed : -projSpeed, 0.f};
+
+            player.spawnProjectile({spawnX, spawnY}, projVel, 30.f, 25.f);
+        }
+    }
+
+    if (player.getAnimator().isFinished() || mCastTimer >= 0.38f) {
         if (player.getIsGrounded()) {
             player.changeState(PlayerStateType::Idle);
         } else {

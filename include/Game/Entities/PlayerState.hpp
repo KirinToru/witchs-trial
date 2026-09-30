@@ -24,7 +24,8 @@ enum class PlayerStateType : uint8_t {
     Dash,
     Pounce,
     MeleeAttack,
-    HeavyStrike
+    HeavyStrike,
+    CastSpell
 };
 
 class PlayerState {

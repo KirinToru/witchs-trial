@@ -4,6 +4,7 @@
 #include <Game/Entities/InteractiveProp2D.hpp>
 #include <Game/Entities/Enemy.hpp>
 #include <Game/Entities/InquisitorFootman.hpp>
+#include <Game/Entities/Projectile.hpp>
 #include <vector>
 #include <memory>
 
@@ -21,6 +22,14 @@ public:
 
 //------------[Spawn Box - Create Rectangle Prop]-------------------
   void spawnBox(sf::Vector2f position);
+//-------------------------------------------------------
+
+//------------[Spawn Crate - Create Destructible Wooden Crate]-------------------
+  void spawnCrate(sf::Vector2f position, sf::Vector2f size = {40.f, 40.f});
+//-------------------------------------------------------
+
+//------------[Spawn Barrel - Create Destructible Barrel Prop]-------------------
+  void spawnBarrel(sf::Vector2f position, sf::Vector2f size = {36.f, 44.f});
 //-------------------------------------------------------
 
 //------------[Spawn Ball - Create Circle Prop]-------------------
@@ -55,7 +64,35 @@ public:
   void clearEnemies();
 //-------------------------------------------------------
 
-//------------[Clear - Remove All Spawned Props and Enemies]-------------------
+//------------[Spawn Projectile - Instantiate Magic Projectile]-------------------
+  void spawnProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage = 30.f, float poiseDamage = 25.f);
+//-------------------------------------------------------
+
+//------------[Update Projectiles - Step Projectile CCD Physics and Lifetimes]-------------------
+  void updateProjectiles(float dt, const Physics::PhysicsWorld& physicsWorld);
+//-------------------------------------------------------
+
+//------------[Render Projectiles - Draw Magic Bolts and Debug Boxes]-------------------
+  void renderProjectiles(sf::RenderWindow& window, bool showHitbox = false);
+//-------------------------------------------------------
+
+//------------[Clear Projectiles - Remove All Active Projectiles]-------------------
+  void clearProjectiles();
+//-------------------------------------------------------
+
+//------------[Get Projectiles Const - Access Active Projectiles Const]-------------------
+  const std::vector<std::unique_ptr<Projectile>>& getProjectiles() const { return mProjectiles; }
+//-------------------------------------------------------
+
+//------------[Get Projectiles Mutable - Access Active Projectiles]-------------------
+  std::vector<std::unique_ptr<Projectile>>& getProjectiles() { return mProjectiles; }
+//-------------------------------------------------------
+
+//------------[Cleanup Destroyed - Remove Destroyed Props and Dead Projectiles]-------------------
+  void cleanupDestroyed();
+//-------------------------------------------------------
+
+//------------[Clear - Remove All Spawned Props, Enemies and Projectiles]-------------------
   void clear();
 //-------------------------------------------------------
 
@@ -63,8 +100,16 @@ public:
   void render(sf::RenderWindow& window);
 //-------------------------------------------------------
 
-//------------[Get Props - Access Spawned Interactive Props Const]-------------------
+//------------[Settle Props - Drop Environmental Props to Floor Colliders]-------------------
+  void settleProps(const Physics::PhysicsWorld& physicsWorld);
+//-------------------------------------------------------
+
+//------------[Get Props Const - Access Spawned Interactive Props Const]-------------------
   const std::vector<std::unique_ptr<InteractiveProp2D>>& getProps() const { return mSpawnedProps; }
+//-------------------------------------------------------
+
+//------------[Get Props Mutable - Access Spawned Interactive Props]-------------------
+  std::vector<std::unique_ptr<InteractiveProp2D>>& getProps() { return mSpawnedProps; }
 //-------------------------------------------------------
 
 //------------[Get Enemies - Access Spawned Enemies Const]-------------------
@@ -76,11 +121,12 @@ public:
 //-------------------------------------------------------
 
 //------------[Get Entity Count - Query Total Managed Entity Count]-------------------
-  size_t getEntityCount() const { return mSpawnedProps.size() + mEnemies.size(); }
+  size_t getEntityCount() const { return mSpawnedProps.size() + mEnemies.size() + mProjectiles.size(); }
 //-------------------------------------------------------
 
 private:
   std::vector<std::unique_ptr<InteractiveProp2D>> mSpawnedProps;
   std::vector<std::unique_ptr<sf::Shape>> mSpawnedShapes;
   std::vector<std::unique_ptr<Enemy>> mEnemies;
+  std::vector<std::unique_ptr<Projectile>> mProjectiles;
 };

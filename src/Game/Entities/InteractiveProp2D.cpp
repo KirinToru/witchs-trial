@@ -1,4 +1,5 @@
 #include <Game/Entities/InteractiveProp2D.hpp>
+#include <algorithm>
 #include <cmath>
 
 //------------[Constructor - Initialize Default Prop]-------------------
@@ -13,6 +14,9 @@ void InteractiveProp2D::init(sf::Vector2f position, sf::Vector2f size, const Pro
     mShapeType = shapeType;
     mVelocity = {0.f, 0.f};
     mRotation = 0.f;
+    mDestructible = true;
+    mHealth = 60.f;
+    mMaxHealth = 60.f;
 }
 //-------------------------------------------------------
 
@@ -77,5 +81,55 @@ InteractiveProp2D::ShapeType InteractiveProp2D::getShapeType() const {
 //------------[Get Settings - Return Physics Parameters]-------------------
 const PropPhysicsSettings& InteractiveProp2D::getSettings() const {
     return mSettings;
+}
+//-------------------------------------------------------
+
+//------------[Is Destructible - Check Destructibility Flag]-------------------
+bool InteractiveProp2D::isDestructible() const {
+    return mDestructible;
+}
+//-------------------------------------------------------
+
+//------------[Set Destructible - Configure Destructibility Flag]-------------------
+void InteractiveProp2D::setDestructible(bool destructible) {
+    mDestructible = destructible;
+}
+//-------------------------------------------------------
+
+//------------[Get Health - Query Remaining Prop Durability]-------------------
+float InteractiveProp2D::getHealth() const {
+    return mHealth;
+}
+//-------------------------------------------------------
+
+//------------[Get Max Health - Query Maximum Prop Durability]-------------------
+float InteractiveProp2D::getMaxHealth() const {
+    return mMaxHealth;
+}
+//-------------------------------------------------------
+
+//------------[Set Health - Update Prop Durability]-------------------
+void InteractiveProp2D::setHealth(float hp) {
+    mHealth = std::clamp(hp, 0.f, mMaxHealth);
+}
+//-------------------------------------------------------
+
+//------------[Is Destroyed - Query Destruction State]-------------------
+bool InteractiveProp2D::isDestroyed() const {
+    return mDestructible && (mHealth <= 0.f);
+}
+//-------------------------------------------------------
+
+//------------[Take Damage - Inflict Structural Damage]-------------------
+bool InteractiveProp2D::takeDamage(float damage) {
+    if (!mDestructible) return false;
+    mHealth = std::max(0.f, mHealth - damage);
+    return mHealth <= 0.f;
+}
+//-------------------------------------------------------
+
+//------------[Get AABB - Calculate World Space Bounding Box]-------------------
+Physics::AABB InteractiveProp2D::getAABB() const {
+    return Physics::AABB::fromCenterHalfExtents(mPosition, mSize * 0.5f);
 }
 //-------------------------------------------------------

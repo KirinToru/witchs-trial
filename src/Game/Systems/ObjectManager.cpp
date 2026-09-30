@@ -1,4 +1,6 @@
 #include <Game/Systems/ObjectManager.hpp>
+#include <Engine/Physics/PhysicsWorld.hpp>
+#include <Engine/Physics/SweptAABB.hpp>
 #include <cmath>
 
 //------------[Constructor - Initialize Empty Manager]-------------------
@@ -15,6 +17,8 @@ void ObjectManager::spawnBox(sf::Vector2f position) {
   
   sf::Vector2f size = {40.f, 40.f};
   prop->init(position, size, settings, InteractiveProp2D::ShapeType::Box);
+  prop->setDestructible(true);
+  prop->setHealth(60.f);
   
   auto shape = std::make_unique<sf::RectangleShape>(size);
   shape->setOrigin({size.x / 2.f, size.y / 2.f});
@@ -22,6 +26,54 @@ void ObjectManager::spawnBox(sf::Vector2f position) {
   shape->setFillColor(sf::Color(180, 100, 50));
   shape->setOutlineThickness(1.f);
   shape->setOutlineColor(sf::Color::White);
+  
+  mSpawnedProps.push_back(std::move(prop));
+  mSpawnedShapes.push_back(std::move(shape));
+}
+//-------------------------------------------------------
+
+//------------[Spawn Crate - Create Destructible Wooden Crate]-------------------
+void ObjectManager::spawnCrate(sf::Vector2f position, sf::Vector2f size) {
+  auto prop = std::make_unique<InteractiveProp2D>();
+  PropPhysicsSettings settings;
+  settings.density = 1.8f;
+  settings.friction = 0.5f;
+  settings.restitution = 0.05f;
+  
+  prop->init(position, size, settings, InteractiveProp2D::ShapeType::Box);
+  prop->setDestructible(true);
+  prop->setHealth(50.f);
+  
+  auto shape = std::make_unique<sf::RectangleShape>(size);
+  shape->setOrigin({size.x / 2.f, size.y / 2.f});
+  shape->setPosition(position);
+  shape->setFillColor(sf::Color(150, 95, 45));
+  shape->setOutlineThickness(1.5f);
+  shape->setOutlineColor(sf::Color(210, 160, 90));
+  
+  mSpawnedProps.push_back(std::move(prop));
+  mSpawnedShapes.push_back(std::move(shape));
+}
+//-------------------------------------------------------
+
+//------------[Spawn Barrel - Create Destructible Barrel Prop]-------------------
+void ObjectManager::spawnBarrel(sf::Vector2f position, sf::Vector2f size) {
+  auto prop = std::make_unique<InteractiveProp2D>();
+  PropPhysicsSettings settings;
+  settings.density = 2.2f;
+  settings.friction = 0.45f;
+  settings.restitution = 0.15f;
+  
+  prop->init(position, size, settings, InteractiveProp2D::ShapeType::Box);
+  prop->setDestructible(true);
+  prop->setHealth(70.f);
+  
+  auto shape = std::make_unique<sf::RectangleShape>(size);
+  shape->setOrigin({size.x / 2.f, size.y / 2.f});
+  shape->setPosition(position);
+  shape->setFillColor(sf::Color(115, 75, 40));
+  shape->setOutlineThickness(1.5f);
+  shape->setOutlineColor(sf::Color(180, 180, 190));
   
   mSpawnedProps.push_back(std::move(prop));
   mSpawnedShapes.push_back(std::move(shape));
@@ -38,6 +90,7 @@ void ObjectManager::spawnBall(sf::Vector2f position) {
   
   sf::Vector2f size = {40.f, 40.f};
   prop->init(position, size, settings, InteractiveProp2D::ShapeType::Circle);
+  prop->setDestructible(false);
   
   auto shape = std::make_unique<sf::CircleShape>(size.x / 2.f);
   shape->setOrigin({size.x / 2.f, size.y / 2.f});
@@ -61,6 +114,7 @@ void ObjectManager::spawnTriangle(sf::Vector2f position) {
   
   sf::Vector2f size = {50.f, 45.f};
   prop->init(position, size, settings, InteractiveProp2D::ShapeType::Triangle);
+  prop->setDestructible(false);
   
   auto shape = std::make_unique<sf::ConvexShape>(3);
   shape->setPoint(0, {-size.x / 2.f, size.y / 2.f});
@@ -86,6 +140,7 @@ void ObjectManager::spawnStar(sf::Vector2f position) {
   
   sf::Vector2f size = {45.f, 45.f};
   prop->init(position, size, settings, InteractiveProp2D::ShapeType::Star);
+  prop->setDestructible(false);
   
   auto shape = std::make_unique<sf::ConvexShape>(10);
   float outerR = size.x / 2.f;
@@ -148,11 +203,63 @@ void ObjectManager::clearEnemies() {
 }
 //-------------------------------------------------------
 
-//------------[Clear - Remove All Spawned Props and Enemies]-------------------
+//------------[Spawn Projectile - Instantiate Magic Projectile]-------------------
+void ObjectManager::spawnProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage, float poiseDamage) {
+  mProjectiles.push_back(std::make_unique<Projectile>(position, velocity, damage, poiseDamage));
+}
+//-------------------------------------------------------
+
+//------------[Update Projectiles - Step Projectile CCD Physics and Lifetimes]-------------------
+void ObjectManager::updateProjectiles(float dt, const Physics::PhysicsWorld& physicsWorld) {
+  for (auto& proj : mProjectiles) {
+    if (proj && !proj->isDead()) {
+      proj->update(dt, physicsWorld);
+    }
+  }
+}
+//-------------------------------------------------------
+
+//------------[Render Projectiles - Draw Magic Bolts and Debug Boxes]-------------------
+void ObjectManager::renderProjectiles(sf::RenderWindow& window, bool showHitbox) {
+  for (auto& proj : mProjectiles) {
+    if (proj && !proj->isDead()) {
+      proj->render(window, showHitbox);
+    }
+  }
+}
+//-------------------------------------------------------
+
+//------------[Clear Projectiles - Remove All Active Projectiles]-------------------
+void ObjectManager::clearProjectiles() {
+  mProjectiles.clear();
+}
+//-------------------------------------------------------
+
+//------------[Cleanup Destroyed - Remove Destroyed Props and Dead Projectiles]-------------------
+void ObjectManager::cleanupDestroyed() {
+  for (size_t i = 0; i < mSpawnedProps.size(); ) {
+    if (mSpawnedProps[i] && mSpawnedProps[i]->isDestroyed()) {
+      mSpawnedProps.erase(mSpawnedProps.begin() + i);
+      if (i < mSpawnedShapes.size()) {
+        mSpawnedShapes.erase(mSpawnedShapes.begin() + i);
+      }
+    } else {
+      ++i;
+    }
+  }
+
+  std::erase_if(mProjectiles, [](const std::unique_ptr<Projectile>& proj) {
+    return !proj || proj->isDead();
+  });
+}
+//-------------------------------------------------------
+
+//------------[Clear - Remove All Spawned Props, Enemies and Projectiles]-------------------
 void ObjectManager::clear() {
   mSpawnedProps.clear();
   mSpawnedShapes.clear();
   mEnemies.clear();
+  mProjectiles.clear();
 }
 //-------------------------------------------------------
 
@@ -166,3 +273,33 @@ void ObjectManager::render(sf::RenderWindow& window) {
 }
 //-------------------------------------------------------
 
+//------------[Settle Props - Drop Environmental Props to Floor Colliders]-------------------
+void ObjectManager::settleProps(const Physics::PhysicsWorld& physicsWorld) {
+  for (size_t i = 0; i < mSpawnedProps.size(); ++i) {
+    auto& prop = mSpawnedProps[i];
+    if (!prop) continue;
+
+    Physics::AABB box = prop->getAABB();
+    Physics::SweptHit groundHit = physicsWorld.sweepTest(box, {0.f, 2000.f}, nullptr, false);
+    float dropDist = groundHit.hit ? (2000.f * groundHit.toi) : 0.f;
+
+    for (size_t j = 0; j < i; ++j) {
+      const auto& other = mSpawnedProps[j];
+      if (!other) continue;
+      Physics::AABB otherBox = other->getAABB();
+      Physics::SweptHit propHit = Physics::sweepAABB(box, {0.f, 2000.f}, otherBox);
+      if (propHit.hit && (propHit.toi * 2000.f) < dropDist) {
+        dropDist = propHit.toi * 2000.f;
+      }
+    }
+
+    if (dropDist > 0.f) {
+      sf::Vector2f newPos = prop->getPosition() + sf::Vector2f(0.f, dropDist);
+      prop->setPosition(newPos);
+      if (i < mSpawnedShapes.size() && mSpawnedShapes[i]) {
+        mSpawnedShapes[i]->setPosition(newPos);
+      }
+    }
+  }
+}
+//-------------------------------------------------------

@@ -11,6 +11,7 @@
 #include <string_view>
 
 class Map;
+class ObjectManager;
 
 namespace Physics {
 class PhysicsWorld;
@@ -407,6 +408,18 @@ public:
     const Engine::Graphics::Animator& getAnimator() const;
 //-------------------------------------------------------
 
+//------------[Set Object Manager - Assign Object Manager For Entity Spawning]-------------------
+    void setObjectManager(ObjectManager* objectManager);
+//-------------------------------------------------------
+
+//------------[Get Object Manager - Access Object Manager]-------------------
+    ObjectManager* getObjectManager() const;
+//-------------------------------------------------------
+
+//------------[Spawn Projectile - Dispatch Projectile Creation to Object Manager]-------------------
+    void spawnProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage = 30.f, float poiseDamage = 25.f);
+//-------------------------------------------------------
+
 private:
 //------------[Recalculate Physics Properties - Update AABB, Mass, and Constants for Active Form]-------------------
     void recalculatePhysicsProperties(const Physics::PhysicsWorld* physicsWorld = nullptr);
@@ -426,7 +439,9 @@ private:
     std::unique_ptr<PlayerPounceState> mPounceState;
     std::unique_ptr<PlayerMeleeAttackState> mMeleeAttackState;
     std::unique_ptr<PlayerHeavyStrikeState> mHeavyStrikeState;
+    std::unique_ptr<PlayerCastSpellState> mCastSpellState;
     PlayerState* mCurrentState{nullptr};
+    ObjectManager* mObjectManager{nullptr};
 
     // Combat Health & Resources
     float mHealth{100.f};
