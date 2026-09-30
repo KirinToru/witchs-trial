@@ -1,13 +1,13 @@
-<h1 align="center">PhysBox 2D</h1>
-<h3 align="center">A 2D Physics Sandbox Game</h3>
+<h1 align="center">Witch's Trial</h1>
+<h3 align="center">A 2D Action-Platformer</h3>
 <p align="center">
 <img src="https://img.shields.io/badge/C++-23-00599C?style=flat-square&logo=c%2B%2B">
-<img src="https://img.shields.io/badge/SFML-v4.4.2-8CC445?logo=SFML&style=flat-square">
-<img src="https://img.shields.io/badge/Box2D-v3.1.1-blue?style=flat-square">
+<img src="https://img.shields.io/badge/SFML-v3.1.0-8CC445?logo=SFML&style=flat-square">
+<img src="https://img.shields.io/badge/Physics-Custom%202D%20Engine-orange?style=flat-square">
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-Source%20Available-informational?style=flat-square"/></a>
 </p>
 
-PhysBox 2D is a two-dimentional physics-based sandbox game. It features rigid body dynamics, wind simulation, and interactive object spawning. Built with C++23, SFML 4.4.2, and Box2D v3.1.1.
+**Witch's Trial** is a 2D action-platformer featuring a strictly custom 2D kinematic physics engine built from scratch. Built with modern C++23 and SFML 3.1.0, free of any third-party physics libraries.
 
 ### Contents
 
@@ -16,61 +16,69 @@ PhysBox 2D is a two-dimentional physics-based sandbox game. It features rigid bo
 - [Tech Stack](#tech-stack)
 - [Build](#build)
 - [Documentation](#documentation)
-- [Generating API Docs (Doxygen)](#generating-api-docs-doxygen)
-- [Used Resources](#used-resources)
 - [License](#license)
 
 ## Features
 
-- **Robust Physics Engine:** Integration with Box2D for stable and accurate rigid body dynamics.
-- **Interactive Sandbox:** A spawn menu allowing players to select and drop various physical objects into the world using the mouse.
-- **Wind Simulation:** Environmental wind forces that realistically affect player movement and physics objects based on their mass and properties.
+- **Custom 2D Kinematic Physics Engine:** Pure vector-based movement without third-party physics libraries.
+- **Responsive Platformer Controller:**
+  - Acceleration, ground friction, and momentum preservation.
+  - Variable jump height with apex gravity reduction (hang time) and early release gravity scaling.
+  - Wall sliding, fast wall sliding, and wall jumping.
+  - Coyote time and jump input buffering for tight game feel.
+  - Upward ceiling corner correction to prevent snagging on edges.
+- **Multi-directional Dash & Air Dash:** Cardinal directional dashes with a brief freeze phase and preserved horizontal momentum.
+- **Tiled Map Integration:** TMX map loading with AABB wall collisions and one-way platforms (drop-through supported).
+- **Developer Tooling:** Built-in dev console (`~`), telemetry HUD (FPS, frame times, speed), and debug hitbox visualization (`F1`).
 
-## [Controls](docs/controls.jpg)
+## Controls
+
+| Action | Primary Key | Secondary Key |
+|---|---|---|
+| Move Left | `A` | `Left Arrow` |
+| Move Right | `D` | `Right Arrow` |
+| Jump / Wall Jump | `Space` | |
+| Dash / Air Dash | `Left Shift` | |
+| Fast Slide / Drop Platform | `S` | `Down Arrow` |
+| Toggle Dev Console | `~` (Grave) | |
+| Toggle Hitboxes | `F1` | |
+| Toggle Telemetry HUD | `F2` | |
+| Cycle Window Mode | `F4` | |
+| Pause Game | `Escape` | |
 
 ## Tech Stack
 
 | Category | Tool |
 |----------|------|
-| Standard | C++23 |
-| Build System | CMake 4.4.2 |
-| Libraries | SFML 3.1.0, Box2D v3.1.1 |
-| Platform | Windows x64, Linux, macOS |
+| Language Standard | C++23 |
+| Build System | CMake 3.28+ |
+| Framework | SFML 3.1.0 |
+| Physics Engine | Custom 2D Kinematic Physics Engine |
+| Supported Platforms | Windows x64, Linux, macOS |
 
 ## Build
 
 ### Prerequisites
 
-- **C++23** compatible compiler (e.g., MSVC, GCC 14+)
-- **CMake** 4.4.2+
-- *Note: SFML and Box2D are automatically downloaded and built via CMake FetchContent.*
+- **C++23** compatible compiler (e.g., MSVC 19.40+ / Visual Studio 2022/2026, GCC 14+, Clang 18+)
+- **CMake** 3.28+
+- *Note: SFML 3.1.0 is automatically downloaded and configured via CMake FetchContent.*
 
-### Windows (Visual Studio) / CMake
+### Windows (Visual Studio / CMake)
 
 ```shell
-mkdir build && cd build
-cmake ..
-cmake --build . --config Release
+cmake -S . -B build
+cmake --build build --config Release
 ```
 
-The executable will be generated in the `build` folder.
+The executable `WitchsTrial` will be generated in the `build` directory with all assets copied post-build.
 
 ## Documentation
 
 - **[Roadmap](docs/ROADMAP.md)** - Planned features and progress tracking
-
-## Generating API Docs (Doxygen)
-
-This project includes a [Doxyfile](docs/Doxyfile) for generating HTML API documentation. Run `doxygen docs/Doxyfile` from the root directory.
-
-## Used Resources
-
-- [SFML 3.1.0 Documentation](https://www.sfml-dev.org/documentation/3.1.0/)
-- [Tiled Documentation](https://doc.mapeditor.org/en/stable/)
-- [Box2D Documentation](https://box2d.org/documentation/)
-- [CMake Documentation](https://cmake.org/documentation/)
+- **[Doxygen](docs/Doxyfile)** - HTML API documentation configuration
 
 ## License
 
 This project uses a **Source Available License**. See [LICENSE](LICENSE) for full details.
-This project uses the external libraries [SFML](https://www.sfml-dev.org/) and [Box2D](https://box2d.org/), which are licensed under their respective open-source licenses.
+This project uses the external multimedia library [SFML](https://www.sfml-dev.org/), licensed under the zlib/png license.

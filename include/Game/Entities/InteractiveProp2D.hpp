@@ -1,14 +1,15 @@
 #pragma once
-#include <box2d/box2d.h>
+
 #include <SFML/System/Vector2.hpp>
+#include <SFML/Graphics/Rect.hpp>
 
 struct PropPhysicsSettings {
     float density = 1.0f;
     float friction = 0.5f;
-    float restitution = 0.0f; // Bounciness (set low for heavy thuds)
-    float linearDamping = 2.0f; // Simulates air resistance
-    float angularDamping = 0.5f; // Keep low for dramatic spinning
-    bool useCCD = true; // Continuous Collision Detection
+    float restitution = 0.0f;
+    float linearDamping = 2.0f;
+    float angularDamping = 0.5f;
+    bool useCCD = true;
     float damageMultiplier = 1.0f;
 };
 
@@ -21,11 +22,29 @@ public:
         Star
     };
 
-    void init(b2WorldId world, sf::Vector2f position, sf::Vector2f size, float P2M, const PropPhysicsSettings& settings, ShapeType shapeType = ShapeType::Box);
-    
-    // Method to calculate impact damage on collision
-    float calculateImpactDamage(const b2Vec2& impactVelocity) const;
+    InteractiveProp2D();
 
-    b2BodyId mBody;
+    void init(sf::Vector2f position, sf::Vector2f size, const PropPhysicsSettings& settings, ShapeType shapeType = ShapeType::Box);
+    float calculateImpactDamage(const sf::Vector2f& impactVelocity) const;
+
+    sf::Vector2f getPosition() const;
+    void setPosition(sf::Vector2f pos);
+
+    sf::Vector2f getVelocity() const;
+    void setVelocity(sf::Vector2f vel);
+
+    sf::Vector2f getSize() const;
+    float getRotation() const;
+    void setRotation(float angle);
+
+    ShapeType getShapeType() const;
+    const PropPhysicsSettings& getSettings() const;
+
+private:
+    sf::Vector2f mPosition{0.f, 0.f};
+    sf::Vector2f mVelocity{0.f, 0.f};
+    sf::Vector2f mSize{0.f, 0.f};
+    float mRotation{0.f};
+    ShapeType mShapeType{ShapeType::Box};
     PropPhysicsSettings mSettings;
 };

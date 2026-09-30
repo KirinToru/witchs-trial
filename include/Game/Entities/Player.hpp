@@ -1,20 +1,16 @@
 #pragma once
+
 #include <SFML/Graphics.hpp>
-#include <box2d/box2d.h>
-#include <Game/Entities/SourceMovementController2D.hpp>
+
+class Map;
 
 class Player {
 public:
   Player();
 
-  void init(b2WorldId world, sf::Vector2f position, float P2M);
-
-  void update(float dtSec);
-
+  void update(float dt, const Map &map);
   void render(sf::RenderWindow &window, bool showHitbox = false);
-
-  void reset(b2WorldId world, sf::Vector2f position, float P2M);
-
+  void reset(sf::Vector2f position);
   void applyForce(sf::Vector2f force);
 
   void setAutoJump(bool enabled);
@@ -22,33 +18,67 @@ public:
 
   sf::Vector2f getPosition() const;
   sf::Vector2f getVelocity() const;
-  
-  b2BodyId getBody() const { return mBody; }
+  sf::FloatRect getBounds() const;
+
+  bool getIsGrounded() const;
+  bool getIsDashing() const;
+  bool getIsWallSliding() const;
+  bool getHasAirDash() const;
+  float getDashCooldownTimer() const;
 
 private:
   sf::RectangleShape shape;
-  
-  sf::Texture texture;
-  sf::Sprite sprite;
-  
-  b2BodyId mBody;
-  b2WorldId mWorld;
-  float mP2M;
-  bool mJumpHeld = false;
 
-  bool facingRight;
+  sf::Vector2f velocity;
   bool isGrounded;
-  
-  SourceMovementController2D movementController;
-  bool jumpedThisFrame = false;
 
-  // New Mechanics fields that were cleared out
+  float moveSpeed;
+  float acceleration;
+  float friction;
+  float gravity;
+  float jumpStrength;
+
+  float wallSlideSpeed;
+  float fastWallSlideSpeed;
+  sf::Vector2f wallJumpForce;
+  bool isWallSliding;
+  int wallDir;
+
   float dashSpeed;
   float dashDuration;
   float dashTimer;
   float dashCooldown;
   float dashCooldownTimer;
   bool isDashing;
+  float dashFreezeDuration;
+  float dashFreezeTimer;
+  sf::Vector2f dashDirection;
   bool hasAirDash;
-  bool mAutoJumpEnabled = false;
+
+  bool hasAirJump;
+  bool isJumping;
+
+  float jumpBufferTime;
+  float jumpBufferTimer;
+  bool bufferedJump;
+
+  float coyoteTime;
+  float coyoteTimer;
+
+  float currentMaxSpeed;
+  float speedDecay;
+
+  sf::Texture texture;
+  sf::Sprite sprite;
+  bool facingRight;
+
+  enum class AnimState { Idle, WalkStart, RunLoop, Stopping, Jumping, Falling };
+  AnimState animState;
+  int currentFrame;
+  float animationTimer;
+  float animationSpeed;
+  bool wasMoving;
+
+  bool wasJumpPressed;
+  bool mAutoJumpEnabled;
 };

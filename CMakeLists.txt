@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(PhysBox2D)
+project(WitchsTrial)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_BUILD_RPATH "$ORIGIN/lib")
@@ -20,18 +20,6 @@ if(MSVC)
     add_compile_options("/Zc:__cplusplus")
 endif()
 
-
-message(STATUS "Fetching Box2D...")
-FetchContent_Declare(
-    box2d
-    GIT_REPOSITORY https://github.com/erincatto/box2d.git
-    GIT_TAG main
-)
-set(BOX2D_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(BOX2D_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
-set(BOX2D_BUILD_TESTBED OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(box2d)
-
 set(SOURCES
     "src/Game/main.cpp"
     "src/Game/Game.cpp"
@@ -50,27 +38,26 @@ set(SOURCES
     "src/Game/Systems/WindSystem.cpp"
     "src/Game/Systems/ObjectManager.cpp"
 )
-add_executable(PhysBox2D ${SOURCES})
+add_executable(WitchsTrial ${SOURCES})
 
-target_include_directories(PhysBox2D PRIVATE include)
-target_link_libraries(PhysBox2D PRIVATE
+target_include_directories(WitchsTrial PRIVATE include)
+target_link_libraries(WitchsTrial PRIVATE
     SFML::Graphics
     SFML::Window
     SFML::System
     SFML::Audio
-    box2d
 )
 
 if(WIN32)
-    add_custom_command(TARGET PhysBox2D POST_BUILD
+    add_custom_command(TARGET WitchsTrial POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/lib"
-        "$<TARGET_FILE_DIR:PhysBox2D>"
+        "$<TARGET_FILE_DIR:WitchsTrial>"
     )
 endif()
 
-add_custom_command(TARGET PhysBox2D POST_BUILD
+add_custom_command(TARGET WitchsTrial POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${CMAKE_SOURCE_DIR}/assets"
-    "$<TARGET_FILE_DIR:PhysBox2D>/assets"
+    "$<TARGET_FILE_DIR:WitchsTrial>/assets"
 )
