@@ -34,6 +34,14 @@ Enemy::Enemy(sf::Vector2f size, float maxHealth, float maxPosture, float moveSpe
     mStaggeredState = std::make_unique<EnemyStaggeredState>();
     mDeadState = std::make_unique<EnemyDeadState>();
 
+    mAnimator.addAnimation(Engine::Graphics::Animation("Idle", 4, 0.25f, true));
+    mAnimator.addAnimation(Engine::Graphics::Animation("Chase", 4, 0.12f, true));
+    mAnimator.addAnimation(Engine::Graphics::Animation("Telegraph", 4, 0.16f, true));
+    mAnimator.addAnimation(Engine::Graphics::Animation("ActiveAttack", 5, 0.08f, false));
+    mAnimator.addAnimation(Engine::Graphics::Animation("Staggered", 4, 0.25f, true));
+    mAnimator.addAnimation(Engine::Graphics::Animation("Dead", 1, 1.0f, false));
+    mAnimator.play("Idle");
+
     mCurrentState = mIdleState.get();
     mCurrentState->enter(*this);
 }
@@ -65,6 +73,8 @@ void Enemy::fixedUpdate(float dt, const Player& player, const Physics::PhysicsWo
     if (mCurrentState) {
         mCurrentState->fixedUpdate(*this, dt, player, physicsWorld);
     }
+
+    mAnimator.update(dt);
 
     mHurtbox.localBounds = Physics::AABB::fromPositionSize({0.f, 0.f}, mShape.getSize());
 }
@@ -565,5 +575,17 @@ void Enemy::setStaggerTimer(float t) {
 //------------[Reset Posture - Restore Posture Meter To Max]-------------------
 void Enemy::resetPosture() {
     mPosture = mMaxPosture;
+}
+//-------------------------------------------------------
+
+//------------[Get Animator - Access Enemy Animator]-------------------
+Engine::Graphics::Animator& Enemy::getAnimator() {
+    return mAnimator;
+}
+//-------------------------------------------------------
+
+//------------[Get Animator Const - Access Enemy Animator Const]-------------------
+const Engine::Graphics::Animator& Enemy::getAnimator() const {
+    return mAnimator;
 }
 //-------------------------------------------------------

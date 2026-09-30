@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Engine/Graphics/Animator.hpp>
 #include <Engine/Physics/AABB.hpp>
 #include <Engine/Physics/RigidBody.hpp>
 #include <Game/Combat/CombatBoxes.hpp>
@@ -193,6 +194,14 @@ public:
     virtual void spawnAttackHitbox() = 0;
 //-------------------------------------------------------
 
+//------------[Get Animator - Access Enemy Animator]-------------------
+    Engine::Graphics::Animator& getAnimator();
+//-------------------------------------------------------
+
+//------------[Get Animator Const - Access Enemy Animator Const]-------------------
+    const Engine::Graphics::Animator& getAnimator() const;
+//-------------------------------------------------------
+
 protected:
 //------------[Protected Constructor - Initialize Enemy Base Properties]-------------------
     Enemy(sf::Vector2f size, float maxHealth, float maxPosture, float moveSpeed,
@@ -203,6 +212,7 @@ protected:
     sf::Vector2f mVelocity{0.f, 0.f};
     bool mIsGrounded{false};
     bool mFacingRight{false};
+    Engine::Graphics::Animator mAnimator;
 
     float mHealth{100.f};
     float mMaxHealth{100.f};

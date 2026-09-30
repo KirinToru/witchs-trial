@@ -18,6 +18,7 @@ void PlayerIdleState::enter(Player& player) {
     player.setHasAirJump(true);
     player.setIsWallSliding(false);
     player.setIsJumping(false);
+    player.getAnimator().play("Idle");
 }
 //-------------------------------------------------------
 
@@ -114,6 +115,7 @@ void PlayerRunState::enter(Player& player) {
     player.setHasAirDash(true);
     player.setHasAirJump(true);
     player.setIsWallSliding(false);
+    player.getAnimator().play("Run");
 }
 //-------------------------------------------------------
 
@@ -223,6 +225,11 @@ void PlayerRunState::fixedUpdate(Player& player, float dt, const Map& map, const
 //------------[Enter - Initialize Airborne State Transition]-------------------
 void PlayerAirborneState::enter(Player& player) {
     player.setIsGrounded(false);
+    if (player.getVelocity().y < 0.f) {
+        player.getAnimator().play("Jump");
+    } else {
+        player.getAnimator().play("Fall");
+    }
 }
 //-------------------------------------------------------
 
@@ -341,6 +348,12 @@ void PlayerAirborneState::fixedUpdate(Player& player, float dt, const Map& map, 
             grav *= 2.0f; // Variable jump height cut-off when releasing Space
         }
 
+        if (vel.y < 0.f) {
+            player.getAnimator().play("Jump");
+        } else {
+            player.getAnimator().play("Fall");
+        }
+
         vel.y += grav * dt;
         if (vel.y > 850.f) vel.y = 850.f; // Terminal velocity
 
@@ -400,6 +413,7 @@ void PlayerDashState::enter(Player& player) {
     player.setDashTimer(0.15f);
     player.setDashFreezeTimer(0.07f);
     player.setDashCooldownTimer(0.5f);
+    player.getAnimator().play("Dash");
 
     bool left = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A);
     bool right = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
@@ -517,6 +531,12 @@ void PlayerPounceState::enter(Player& player) {
         player.setVelocity({pounceX, pounceY});
         player.setCurrentMaxSpeed(750.f);
     }
+
+    if (mIsGroundSmash) {
+        player.getAnimator().play("Fall");
+    } else {
+        player.getAnimator().play("Jump");
+    }
 }
 //-------------------------------------------------------
 
@@ -584,8 +604,8 @@ void PlayerMeleeAttackState::enter(Player& player) {
     mHitboxActivated = false;
     mHitboxDeactivated = false;
     player.deactivateAttackHitbox();
+    player.getAnimator().play("Attack", true);
 
-    // Small forward lunge impulse
     sf::Vector2f vel = player.getVelocity();
     vel.x = player.isFacingRight() ? 120.f : -120.f;
     player.setVelocity(vel);
@@ -627,10 +647,8 @@ void PlayerMeleeAttackState::fixedUpdate(Player& player, float dt, const Map& ma
     player.setVelocity(vel);
     player.moveWithSweptCCD(vel * dt, physicsWorld, false);
 
-    // Frame window: 0.00s - 0.08s = startup windup
-    //               0.08s - 0.22s = active slash hitbox
-    //               0.22s - 0.32s = recovery
-    if (mAttackTimer >= 0.08f && !mHitboxActivated) {
+    std::size_t frame = player.getAnimator().getCurrentFrame();
+    if (frame >= 1 && frame < 3 && !mHitboxActivated) {
         mHitboxActivated = true;
         Combat::Hitbox slash;
         slash.damage = 25.f;
@@ -644,12 +662,12 @@ void PlayerMeleeAttackState::fixedUpdate(Player& player, float dt, const Map& ma
             slash.localBounds = Physics::AABB::fromPositionSize({-26.f, -2.f}, {36.f, 38.f});
         }
         player.setAttackHitbox(slash);
-    } else if (mAttackTimer >= 0.22f && !mHitboxDeactivated) {
+    } else if (frame >= 3 && !mHitboxDeactivated) {
         mHitboxDeactivated = true;
         player.deactivateAttackHitbox();
     }
 
-    if (mAttackTimer >= 0.32f) {
+    if (player.getAnimator().isFinished() || mAttackTimer >= 0.34f) {
         if (player.getIsGrounded()) {
             player.changeState(PlayerStateType::Idle);
         } else {
@@ -670,11 +688,10 @@ void PlayerHeavyStrikeState::enter(Player& player) {
     mHitboxActivated = false;
     mHitboxDeactivated = false;
     player.deactivateAttackHitbox();
+    player.getAnimator().play("HeavyStrike", true);
 
-    // Heavy strike builds rage upon execution
     player.addRage(15.f);
 
-    // Forward claw lunge impulse
     sf::Vector2f vel = player.getVelocity();
     vel.x = player.isFacingRight() ? 220.f : -220.f;
     player.setVelocity(vel);
@@ -716,14 +733,12 @@ void PlayerHeavyStrikeState::fixedUpdate(Player& player, float dt, const Map& ma
     player.setVelocity(vel);
     player.moveWithSweptCCD(vel * dt, physicsWorld, false);
 
-    // Frame window: 0.00s - 0.16s = heavy windup
-    //               0.16s - 0.34s = active heavy claw arc
-    //               0.34s - 0.46s = recovery
-    if (mAttackTimer >= 0.16f && !mHitboxActivated) {
+    std::size_t frame = player.getAnimator().getCurrentFrame();
+    if (frame >= 1 && frame < 3 && !mHitboxActivated) {
         mHitboxActivated = true;
         Combat::Hitbox claw;
         claw.damage = 50.f;
-        claw.poiseDamage = 45.f; // Massive poise-breaking capability
+        claw.poiseDamage = 45.f;
         claw.knockback = player.isFacingRight() ? sf::Vector2f(350.f, -140.f) : sf::Vector2f(-350.f, -140.f);
         claw.active = true;
 
@@ -733,12 +748,12 @@ void PlayerHeavyStrikeState::fixedUpdate(Player& player, float dt, const Map& ma
             claw.localBounds = Physics::AABB::fromPositionSize({-32.f, -6.f}, {48.f, 52.f});
         }
         player.setAttackHitbox(claw);
-    } else if (mAttackTimer >= 0.34f && !mHitboxDeactivated) {
+    } else if (frame >= 3 && !mHitboxDeactivated) {
         mHitboxDeactivated = true;
         player.deactivateAttackHitbox();
     }
 
-    if (mAttackTimer >= 0.46f) {
+    if (player.getAnimator().isFinished() || mAttackTimer >= 0.46f) {
         if (player.getIsGrounded()) {
             player.changeState(PlayerStateType::Idle);
         } else {

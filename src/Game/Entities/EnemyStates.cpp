@@ -13,6 +13,7 @@ void EnemyIdleState::enter(Enemy& enemy) {
     sf::Vector2f vel = enemy.getVelocity();
     vel.x = 0.f;
     enemy.setVelocity(vel);
+    enemy.getAnimator().play("Idle");
 }
 //-------------------------------------------------------
 
@@ -48,8 +49,8 @@ void EnemyIdleState::fixedUpdate(Enemy& enemy, float dt, const Player& player, c
 
 //------------[Enter - Initialize Chase Behavior]-------------------
 void EnemyChaseState::enter(Enemy& enemy) {
-    (void)enemy;
     mLostLoSTimer = 0.f;
+    enemy.getAnimator().play("Chase");
 }
 //-------------------------------------------------------
 
@@ -107,6 +108,7 @@ void EnemyChaseState::fixedUpdate(Enemy& enemy, float dt, const Player& player, 
 void EnemyTelegraphAttackState::enter(Enemy& enemy) {
     enemy.setTelegraphTimer(0.f);
     enemy.deactivateAttackHitbox();
+    enemy.getAnimator().play("Telegraph", true);
 
     sf::Vector2f vel = enemy.getVelocity();
     vel.x = 0.f;
@@ -149,8 +151,8 @@ void EnemyActiveAttackState::enter(Enemy& enemy) {
     mHitboxActivated = false;
     mHitboxDeactivated = false;
     enemy.deactivateAttackHitbox();
+    enemy.getAnimator().play("ActiveAttack", true);
 
-    // Minor forward lunge impulse during swing
     sf::Vector2f vel = enemy.getVelocity();
     vel.x = enemy.isFacingRight() ? 90.f : -90.f;
     enemy.setVelocity(vel);
@@ -172,20 +174,20 @@ void EnemyActiveAttackState::fixedUpdate(Enemy& enemy, float dt, const Player& p
 
     sf::Vector2f vel = enemy.getVelocity();
     vel.y += 980.f * dt;
-    vel.x *= std::max(0.f, 1.f - 4.f * dt); // Smooth lunge friction
+    vel.x *= std::max(0.f, 1.f - 4.f * dt);
     enemy.setVelocity(vel);
     enemy.moveWithSweptCCD(vel * dt, physicsWorld, player.getRigidBody());
 
-    // Hitbox window: 0.06s to 0.22s
-    if (mAttackTimer >= 0.06f && !mHitboxActivated) {
+    std::size_t frame = enemy.getAnimator().getCurrentFrame();
+    if (frame >= 1 && frame < 3 && !mHitboxActivated) {
         mHitboxActivated = true;
         enemy.spawnAttackHitbox();
-    } else if (mAttackTimer >= 0.22f && !mHitboxDeactivated) {
+    } else if (frame >= 3 && !mHitboxDeactivated) {
         mHitboxDeactivated = true;
         enemy.deactivateAttackHitbox();
     }
 
-    if (mAttackTimer >= 0.45f) {
+    if (enemy.getAnimator().isFinished() || mAttackTimer >= 0.45f) {
         enemy.setAttackCooldownTimer(0.9f);
         enemy.changeState(EnemyStateType::Chase);
     }
@@ -200,6 +202,7 @@ void EnemyActiveAttackState::fixedUpdate(Enemy& enemy, float dt, const Player& p
 void EnemyStaggeredState::enter(Enemy& enemy) {
     enemy.setStaggerTimer(0.f);
     enemy.deactivateAttackHitbox();
+    enemy.getAnimator().play("Staggered");
 
     sf::Vector2f vel = enemy.getVelocity();
     vel.x = 0.f;
@@ -240,6 +243,7 @@ void EnemyDeadState::enter(Enemy& enemy) {
     enemy.deactivateAttackHitbox();
     enemy.getHurtbox().active = false;
     enemy.setVelocity({0.f, 0.f});
+    enemy.getAnimator().play("Dead");
 }
 //-------------------------------------------------------
 

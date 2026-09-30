@@ -14,14 +14,19 @@ Player::Player()
       mForm(PlayerForm::Witch),
       sprite(texture),
       facingRight(true),
-      animState(AnimState::Idle),
-      currentFrame(0),
-      animationTimer(0.f),
-      animationSpeed(0.1f),
-      wasMoving(false),
       wasJumpPressed(false),
       wasTransformPressed(false),
       mAutoJumpEnabled(false) {
+
+    mAnimator.addAnimation(Engine::Graphics::Animation("Idle", 0, 0, 2, {32, 32}, 0.35f, true));
+    mAnimator.addAnimation(Engine::Graphics::Animation("Walk", 1, 0, 2, {32, 32}, 0.15f, true));
+    mAnimator.addAnimation(Engine::Graphics::Animation("Run", 2, 0, 4, {32, 32}, 0.10f, true));
+    mAnimator.addAnimation(Engine::Graphics::Animation("Dash", 3, 0, 2, {32, 32}, 0.08f, true));
+    mAnimator.addAnimation(Engine::Graphics::Animation("Jump", 4, 0, 2, {32, 32}, 0.12f, true));
+    mAnimator.addAnimation(Engine::Graphics::Animation("Fall", 5, 0, 2, {32, 32}, 0.12f, true));
+    mAnimator.addAnimation(Engine::Graphics::Animation("Attack", 5, 0, 4, {32, 32}, 0.08f, false));
+    mAnimator.addAnimation(Engine::Graphics::Animation("HeavyStrike", 2, 0, 4, {32, 32}, 0.11f, false));
+    mAnimator.play("Idle");
 
     // Instantiate concrete states
     mIdleState = std::make_unique<PlayerIdleState>();
@@ -778,118 +783,16 @@ void Player::checkOneWayDropThrough(const Physics::PhysicsWorld& physicsWorld) {
 
 //------------[Update Animation - Step Character Sprite Animation Frame]-------------------
 void Player::updateAnimation(float dt) {
-    bool isMoving = std::abs(velocity.x) > 10.f;
-    bool left = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A);
-    bool right = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
-    bool inputActive = left || right;
-
-    if (isGrounded && !isWallSliding) {
-        if (!isMoving && !inputActive) {
-            if (animState != AnimState::Idle && animState != AnimState::Stopping) {
-                animState = AnimState::Stopping;
-                currentFrame = 0;
-                animationTimer = 0.f;
-            } else if (animState == AnimState::Stopping) {
-                animationTimer += dt;
-                float stopSpeed = 0.06f;
-                if (animationTimer >= stopSpeed) {
-                    animationTimer = 0.f;
-                    currentFrame = (currentFrame == 0) ? 1 : 0;
-                }
-                if (std::abs(velocity.x) < 5.f) {
-                    animState = AnimState::Idle;
-                    currentFrame = 0;
-                    animationTimer = 0.f;
-                }
-                sprite.setTextureRect(sf::IntRect({currentFrame * 32, 96}, {32, 32}));
-            } else {
-                animationTimer += dt;
-                float frameDelay = (currentFrame == 0) ? 2.0f : 0.5f;
-                if (animationTimer >= frameDelay) {
-                    animationTimer = 0.f;
-                    currentFrame = (currentFrame + 1) % 2;
-                }
-                sprite.setTextureRect(sf::IntRect({currentFrame * 32, 0}, {32, 32}));
-            }
-        } else if (inputActive && isMoving) {
-            if (animState == AnimState::Idle || animState == AnimState::Stopping || !wasMoving) {
-                animState = AnimState::WalkStart;
-                currentFrame = 0;
-                animationTimer = 0.f;
-            }
-            animationTimer += dt;
-
-            if (animState == AnimState::WalkStart) {
-                float walkSpeed = 0.15f;
-                if (animationTimer >= walkSpeed) {
-                    animationTimer = 0.f;
-                    currentFrame++;
-                    if (currentFrame >= 2) {
-                        animState = AnimState::RunLoop;
-                        currentFrame = 0;
-                    }
-                }
-                sprite.setTextureRect(sf::IntRect({currentFrame * 32, 32}, {32, 32}));
-            } else {
-                float runSpeed = 0.1f;
-                if (animationTimer >= runSpeed) {
-                    animationTimer = 0.f;
-                    currentFrame = (currentFrame + 1) % 4;
-                }
-                sprite.setTextureRect(sf::IntRect({currentFrame * 32, 64}, {32, 32}));
-            }
-        } else {
-            if (animState != AnimState::Stopping) {
-                animState = AnimState::Stopping;
-                currentFrame = 0;
-                animationTimer = 0.f;
-            }
-            animationTimer += dt;
-            float stopSpeed = 0.1f;
-            if (animationTimer >= stopSpeed) {
-                animationTimer = 0.f;
-                currentFrame = (currentFrame == 0) ? 1 : 0;
-            }
-            sprite.setTextureRect(sf::IntRect({currentFrame * 32, 96}, {32, 32}));
-        }
-    } else {
-        float airAnimSpeed = 0.1f;
-        if (velocity.y < 0.f) {
-            if (animState != AnimState::Jumping) {
-                animState = AnimState::Jumping;
-                currentFrame = 0;
-                animationTimer = 0.f;
-            }
-            animationTimer += dt;
-            if (animationTimer >= airAnimSpeed) {
-                animationTimer = 0.f;
-                currentFrame = (currentFrame + 1) % 2;
-            }
-            sprite.setTextureRect(sf::IntRect({currentFrame * 32, 128}, {32, 32}));
-        } else {
-            if (animState != AnimState::Falling) {
-                animState = AnimState::Falling;
-                currentFrame = 0;
-                animationTimer = 0.f;
-            }
-            sprite.setTextureRect(sf::IntRect({0, 160}, {32, 32}));
-        }
-    }
-
-    wasMoving = isMoving;
-
-    // Align bottom center of sprite with bottom center of hitbox
-    sf::Vector2f bottomCenter = {shape.getPosition().x + shape.getSize().x / 2.f,
-                                 shape.getPosition().y + shape.getSize().y};
-    sprite.setPosition(bottomCenter);
-
     if (velocity.x > 1.f) {
         facingRight = true;
     } else if (velocity.x < -1.f) {
         facingRight = false;
     }
 
-    // Visual scale and form color tint
+    sf::Vector2f bottomCenter = {shape.getPosition().x + shape.getSize().x / 2.f,
+                                 shape.getPosition().y + shape.getSize().y};
+    sprite.setPosition(bottomCenter);
+
     float scaleX = (mForm == PlayerForm::Witch) ? 1.5f : 1.8f;
     float scaleY = (mForm == PlayerForm::Witch) ? 1.5f : 1.8f;
     sprite.setScale({facingRight ? scaleX : -scaleX, scaleY});
@@ -897,8 +800,10 @@ void Player::updateAnimation(float dt) {
     if (mForm == PlayerForm::Witch) {
         sprite.setColor(sf::Color::White);
     } else {
-        sprite.setColor(sf::Color(255, 140, 120)); // Ferocious Beast werewolf tint
+        sprite.setColor(sf::Color(255, 140, 120));
     }
+
+    mAnimator.update(dt, &sprite);
 }
 //-------------------------------------------------------
 
@@ -1129,6 +1034,18 @@ bool Player::consumeGroundSmashImpact() {
     bool impact = mGroundSmashImpact;
     mGroundSmashImpact = false;
     return impact;
+}
+//-------------------------------------------------------
+
+//------------[Get Animator - Access Character Animator]-------------------
+Engine::Graphics::Animator& Player::getAnimator() {
+    return mAnimator;
+}
+//-------------------------------------------------------
+
+//------------[Get Animator Const - Access Character Animator Const]-------------------
+const Engine::Graphics::Animator& Player::getAnimator() const {
+    return mAnimator;
 }
 //-------------------------------------------------------
 

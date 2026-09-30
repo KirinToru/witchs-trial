@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Engine/Graphics/Animator.hpp>
 #include <Engine/Physics/AABB.hpp>
 #include <Engine/Physics/RigidBody.hpp>
 #include <Game/Combat/CombatBoxes.hpp>
@@ -398,6 +399,14 @@ public:
     bool consumeGroundSmashImpact();
 //-------------------------------------------------------
 
+//------------[Get Animator - Access Character Animator]-------------------
+    Engine::Graphics::Animator& getAnimator();
+//-------------------------------------------------------
+
+//------------[Get Animator Const - Access Character Animator Const]-------------------
+    const Engine::Graphics::Animator& getAnimator() const;
+//-------------------------------------------------------
+
 private:
 //------------[Recalculate Physics Properties - Update AABB, Mass, and Constants for Active Form]-------------------
     void recalculatePhysicsProperties(const Physics::PhysicsWorld* physicsWorld = nullptr);
@@ -483,13 +492,7 @@ private:
     sf::Texture texture;
     sf::Sprite sprite;
     bool facingRight{true};
-
-    enum class AnimState { Idle, WalkStart, RunLoop, Stopping, Jumping, Falling };
-    AnimState animState{AnimState::Idle};
-    int currentFrame{0};
-    float animationTimer{0.f};
-    float animationSpeed{0.1f};
-    bool wasMoving{false};
+    Engine::Graphics::Animator mAnimator;
 
     bool wasJumpPressed{false};
     bool wasTransformPressed{false};
