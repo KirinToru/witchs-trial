@@ -308,7 +308,11 @@ void PhysicsWorld::resolveVelocity(CollisionManifold& manifold) {
     float velAlongNormal = rv.x * manifold.normal.x + rv.y * manifold.normal.y;
     if (velAlongNormal > 0.f) return;
 
-    float e = std::min(a->getRestitution(), b->getRestitution());
+    float e = std::max(a->getRestitution(), b->getRestitution());
+    if (a->getTag() == ColliderTag::TrampolineModifier || b->getTag() == ColliderTag::TrampolineModifier) {
+        e = std::max(e, 1.25f);
+    }
+
     float j = -(1.0f + e) * velAlongNormal / totalInvMass;
     sf::Vector2f impulse = j * manifold.normal;
 
@@ -324,6 +328,9 @@ void PhysicsWorld::resolveVelocity(CollisionManifold& manifold) {
         tangent /= tangentLen;
         float jt = -(rvTangential.x * tangent.x + rvTangential.y * tangent.y) / totalInvMass;
         float mu = std::sqrt(a->getFriction() * b->getFriction());
+        if (a->getTag() == ColliderTag::IceModifier || b->getTag() == ColliderTag::IceModifier) {
+            mu = std::min(mu, 0.03f);
+        }
         float maxFriction = j * mu;
         jt = std::clamp(jt, -maxFriction, maxFriction);
 

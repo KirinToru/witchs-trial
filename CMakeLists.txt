@@ -31,6 +31,8 @@ set(SOURCES
     "src/Game/Entities/GrandInquisitor.cpp"
     "src/Game/Entities/SourceMovementController2D.cpp"
     "src/Game/Entities/InteractiveProp2D.cpp"
+    "src/Game/Entities/PendulumTrap.cpp"
+    "src/Game/Entities/Projectile.cpp"
     "src/Game/World/Map.cpp"
     "src/Game/States/MenuState.cpp"
     "src/Game/States/PauseState.cpp"
@@ -45,6 +47,7 @@ set(SOURCES
     "src/Engine/Physics/PhysicsWorld.cpp"
     "src/Engine/Audio/AudioManager.cpp"
     "src/Engine/Graphics/ParticleSystem.cpp"
+    "src/Engine/Graphics/FontManager.cpp"
 )
 add_executable(WitchsTrial ${SOURCES})
 

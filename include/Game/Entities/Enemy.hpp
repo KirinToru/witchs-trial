@@ -210,6 +210,10 @@ public:
     float getStaggerDuration() const;
 //-------------------------------------------------------
 
+//------------[Set Stagger Duration - Update Stun Duration Upon Posture Break]-------------------
+    void setStaggerDuration(float d);
+//-------------------------------------------------------
+
 //------------[Get Stagger Timer - Query Stagger Elapsed Time]-------------------
     float getStaggerTimer() const;
 //-------------------------------------------------------

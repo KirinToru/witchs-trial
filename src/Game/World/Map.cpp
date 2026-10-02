@@ -243,6 +243,7 @@ bool Map::parseTMX(const std::string &content, const std::string &basePath) {
   mHasLevelTrigger = false;
   mSavePoints.clear();
   mLightMarkers.clear();
+  mPendulumTrapSpawns.clear();
   finishAreas.clear();
 
   for (const auto &layer : layers) {
@@ -296,6 +297,10 @@ bool Map::parseTMX(const std::string &content, const std::string &basePath) {
           } else if (localId == TileType::LightMarker) {
             mLightMarkers.push_back({
                 static_cast<float>(x) * TILE_SIZE,
+                static_cast<float>(y) * TILE_SIZE});
+          } else if (localId == TileType::PendulumTrap) {
+            mPendulumTrapSpawns.push_back({
+                static_cast<float>(x) * TILE_SIZE + TILE_SIZE / 2.f,
                 static_cast<float>(y) * TILE_SIZE});
           }
         }
@@ -1207,11 +1212,11 @@ void Map::generateColliders(Physics::PhysicsWorld &physicsWorld) const {
             float width = static_cast<float>(x - startX) * TILE_SIZE;
             Physics::RigidBodyDef def;
             def.type = Physics::BodyType::Static;
-            def.tag = Physics::ColliderTag::SolidWall;
+            def.tag = Physics::ColliderTag::IceModifier;
             def.isOneWay = false;
             def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
             def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
-            def.friction = 0.05f;
+            def.friction = 0.02f;
             def.restitution = 0.0f;
             physicsWorld.createBody(def);
             startX = -1;
@@ -1222,11 +1227,11 @@ void Map::generateColliders(Physics::PhysicsWorld &physicsWorld) const {
         float width = static_cast<float>(w - startX) * TILE_SIZE;
         Physics::RigidBodyDef def;
         def.type = Physics::BodyType::Static;
-        def.tag = Physics::ColliderTag::SolidWall;
+        def.tag = Physics::ColliderTag::IceModifier;
         def.isOneWay = false;
         def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
         def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
-        def.friction = 0.05f;
+        def.friction = 0.02f;
         def.restitution = 0.0f;
         physicsWorld.createBody(def);
       }
@@ -1255,12 +1260,12 @@ void Map::generateColliders(Physics::PhysicsWorld &physicsWorld) const {
             float width = static_cast<float>(x - startX) * TILE_SIZE;
             Physics::RigidBodyDef def;
             def.type = Physics::BodyType::Static;
-            def.tag = Physics::ColliderTag::SolidWall;
+            def.tag = Physics::ColliderTag::TrampolineModifier;
             def.isOneWay = false;
             def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
             def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
             def.friction = 0.5f;
-            def.restitution = 1.0f;
+            def.restitution = 1.25f;
             physicsWorld.createBody(def);
             startX = -1;
           }
@@ -1270,12 +1275,12 @@ void Map::generateColliders(Physics::PhysicsWorld &physicsWorld) const {
         float width = static_cast<float>(w - startX) * TILE_SIZE;
         Physics::RigidBodyDef def;
         def.type = Physics::BodyType::Static;
-        def.tag = Physics::ColliderTag::SolidWall;
+        def.tag = Physics::ColliderTag::TrampolineModifier;
         def.isOneWay = false;
         def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
         def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
         def.friction = 0.5f;
-        def.restitution = 1.0f;
+        def.restitution = 1.25f;
         physicsWorld.createBody(def);
       }
     }

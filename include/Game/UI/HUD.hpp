@@ -33,10 +33,15 @@ public:
   void setBossInfo(bool active, std::string_view name = "", float health = 0.f, float maxHealth = 1.f, float posture = 0.f, float maxPosture = 1.f, int phase = 1);
 //-------------------------------------------------------
 
+//------------[Set Combo Step - Update Displayed Melee Combo Counter]-------------------
+  void setComboStep(int step);
+//-------------------------------------------------------
+
 private:
   bool mShowHitbox;
   bool mShowFPS;
   bool mShowDebugRaycast{true};
+  int mComboStep{0};
 
   sf::Font mFPSFont;
   bool mFPSFontLoaded;
@@ -57,6 +62,7 @@ private:
   float mMaxMana{100.f};
   float mRage{0.f};
   float mMaxRage{100.f};
+  float mAnimationTimer{0.f};
 
   bool mBossActive{false};
   std::string mBossName;

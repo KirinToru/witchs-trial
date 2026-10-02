@@ -127,6 +127,10 @@ public:
   const std::vector<sf::Vector2f>& getLightMarkers() const { return mLightMarkers; }
 //-------------------------------------------------------
 
+//------------[Get Pendulum Trap Spawns - Query List of Parsed Pendulum Trap Coordinates]-------------------
+  const std::vector<sf::Vector2f>& getPendulumTrapSpawns() const { return mPendulumTrapSpawns; }
+//-------------------------------------------------------
+
 //------------[Render - Render Visible Map Tiles and Background]-------------------
   void render(sf::RenderWindow &window, sf::Vector2f playerPos = {0, 0},
               bool showHitboxes = false);
@@ -174,6 +178,7 @@ private:
   bool mHasLevelTrigger{false};
   std::vector<sf::Vector2f> mSavePoints;
   std::vector<sf::Vector2f> mLightMarkers;
+  std::vector<sf::Vector2f> mPendulumTrapSpawns;
 
   std::vector<sf::FloatRect> finishAreas;
 

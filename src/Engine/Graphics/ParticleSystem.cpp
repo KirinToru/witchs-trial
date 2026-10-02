@@ -289,4 +289,60 @@ void ParticleSystem::emitDebrisBurst(sf::Vector2f position) {
 }
 //-------------------------------------------------------
 
+//------------[Emit Parry Sparks - Spawn Sharp Metallic Deflection Spark Particles]-------------------
+void ParticleSystem::emitParrySparks(sf::Vector2f position) {
+    for (int i = 0; i < 32; ++i) {
+        float angle = randomFloat(0.f, 6.2831853f);
+        float speed = randomFloat(320.f, 780.f);
+
+        Particle p;
+        p.position = position;
+        p.velocity = {std::cos(angle) * speed, std::sin(angle) * speed};
+        if (i % 2 == 0) {
+            p.startColor = sf::Color(255, 255, 230, 255);
+            p.endColor = sf::Color(255, 200, 50, 0);
+        } else {
+            p.startColor = sf::Color(255, 215, 60, 255);
+            p.endColor = sf::Color(255, 120, 0, 0);
+        }
+        p.maxLifetime = randomFloat(0.12f, 0.28f);
+        p.startScale = randomFloat(3.5f, 6.5f);
+        p.endScale = 0.5f;
+        p.gravity = 250.f;
+        p.drag = 3.5f;
+        emit(p);
+    }
+}
+//-------------------------------------------------------
+
+//------------[Emit Roar Shockwave - Spawn Expanding Radial Shockwave Ring]-------------------
+void ParticleSystem::emitRoarShockwave(sf::Vector2f position) {
+    for (int i = 0; i < 48; ++i) {
+        float angle = (static_cast<float>(i) / 48.f) * 6.2831853f + randomFloat(-0.05f, 0.05f);
+        float speed = randomFloat(420.f, 680.f);
+
+        Particle p;
+        p.position = position;
+        p.velocity = {std::cos(angle) * speed, std::sin(angle) * speed};
+        if (i % 3 == 0) {
+            p.startColor = sf::Color(255, 70, 40, 240);
+            p.endColor = sf::Color(180, 20, 10, 0);
+        } else if (i % 3 == 1) {
+            p.startColor = sf::Color(255, 160, 50, 255);
+            p.endColor = sf::Color(220, 60, 0, 0);
+        } else {
+            p.startColor = sf::Color(255, 240, 180, 255);
+            p.endColor = sf::Color(255, 100, 30, 0);
+        }
+        p.maxLifetime = randomFloat(0.25f, 0.45f);
+        p.startScale = randomFloat(5.f, 10.f);
+        p.endScale = 1.0f;
+        p.gravity = 0.f;
+        p.drag = 2.2f;
+        emit(p);
+    }
+}
+//-------------------------------------------------------
+
 } // namespace Engine::Graphics
+

@@ -7,6 +7,7 @@
 #include <Game/Entities/GrandInquisitor.hpp>
 #include <Game/Entities/Projectile.hpp>
 #include <Game/Entities/IceWall.hpp>
+#include <Game/Entities/PendulumTrap.hpp>
 #include <vector>
 #include <memory>
 
@@ -79,7 +80,7 @@ public:
 //-------------------------------------------------------
 
 //------------[Spawn Pogo Orb - Instantiate Large Strikeable Magic Orb]-------------------
-  void spawnPogoOrb(sf::Vector2f position, sf::Vector2f velocity, float damage = 25.f);
+  void spawnPogoOrb(sf::Vector2f position, sf::Vector2f velocity, float damage = 55.f);
 //-------------------------------------------------------
 
 //------------[Spawn Gun Projectile - Instantiate Fast High-Velocity Gun Shot]-------------------
@@ -102,8 +103,32 @@ public:
   void renderIceWalls(sf::RenderWindow& window, bool showHitbox = false);
 //-------------------------------------------------------
 
+//------------[Spawn Pendulum Trap - Instantiate Swinging Hazard Trap]-------------------
+  PendulumTrap* spawnPendulumTrap(sf::Vector2f pivot, float length = 140.f, float initialAngle = 1.05f);
+//-------------------------------------------------------
+
+//------------[Update Pendulum Traps - Step Numerical Integration Loop]-------------------
+  void updatePendulumTraps(float dt);
+//-------------------------------------------------------
+
+//------------[Render Pendulum Traps - Draw Ropes and Spiked Bob Hazards]-------------------
+  void renderPendulumTraps(sf::RenderWindow& window, bool showHitbox = false);
+//-------------------------------------------------------
+
+//------------[Clear Pendulum Traps - Remove All Active Pendulum Traps]-------------------
+  void clearPendulumTraps();
+//-------------------------------------------------------
+
+//------------[Get Pendulum Traps Const - Access Active Pendulum Traps Const]-------------------
+  const std::vector<std::unique_ptr<PendulumTrap>>& getPendulumTraps() const { return mPendulumTraps; }
+//-------------------------------------------------------
+
+//------------[Get Pendulum Traps Mutable - Access Active Pendulum Traps]-------------------
+  std::vector<std::unique_ptr<PendulumTrap>>& getPendulumTraps() { return mPendulumTraps; }
+//-------------------------------------------------------
+
 //------------[Update Projectiles - Step Projectile CCD Physics and Lifetimes]-------------------
-  void updateProjectiles(float dt, const Physics::PhysicsWorld& physicsWorld, Engine::Graphics::ParticleSystem* particleSystem = nullptr);
+  void updateProjectiles(float dt, const Physics::PhysicsWorld& physicsWorld, Engine::Graphics::ParticleSystem* particleSystem = nullptr, Player* player = nullptr);
 //-------------------------------------------------------
 
 //------------[Render Projectiles - Draw Magic Bolts and Debug Boxes]-------------------
@@ -167,7 +192,7 @@ public:
 //-------------------------------------------------------
 
 //------------[Get Entity Count - Query Total Managed Entity Count]-------------------
-  size_t getEntityCount() const { return mSpawnedProps.size() + mEnemies.size() + mProjectiles.size() + mIceWalls.size(); }
+  size_t getEntityCount() const { return mSpawnedProps.size() + mEnemies.size() + mProjectiles.size() + mIceWalls.size() + mPendulumTraps.size(); }
 //-------------------------------------------------------
 
 private:
@@ -176,5 +201,6 @@ private:
   std::vector<std::unique_ptr<Enemy>> mEnemies;
   std::vector<std::unique_ptr<Projectile>> mProjectiles;
   std::vector<std::unique_ptr<IceWall>> mIceWalls;
+  std::vector<std::unique_ptr<PendulumTrap>> mPendulumTraps;
   GrandInquisitor* mBoss{nullptr};
 };

@@ -42,6 +42,7 @@ Player::Player()
     mCastSpellState = std::make_unique<PlayerCastSpellState>();
     mGunState = std::make_unique<PlayerGunState>();
     mParryState = std::make_unique<PlayerParryState>();
+    mRoarState = std::make_unique<PlayerRoarState>();
 
     // Set initial active state
     mCurrentState = mIdleState.get();
@@ -154,17 +155,26 @@ void Player::fixedUpdate(float dt, const Map& map, const Physics::PhysicsWorld& 
         }
     }
 
-    // Combat resource updates
     if (mStaminaRegenDelayTimer > 0.f) {
         mStaminaRegenDelayTimer -= dt;
     } else if (mStamina < mMaxStamina) {
         mStamina = std::min(mMaxStamina, mStamina + mStaminaRegenRate * dt);
     }
 
-    if (mRageDecayDelayTimer > 0.f) {
-        mRageDecayDelayTimer -= dt;
-    } else if (mRage > 0.f) {
-        mRage = std::max(0.f, mRage - mRageDecayRate * dt);
+    if (mForm == PlayerForm::Beast) {
+        if (mRageDecayDelayTimer > 0.f) {
+            mRageDecayDelayTimer -= dt;
+        } else if (mRage > 0.f) {
+            mRage = std::max(0.f, mRage - mRageDecayRate * dt);
+        }
+        if (mRage <= 0.f) {
+            setForm(PlayerForm::Witch, &physicsWorld);
+            Engine::Audio::AudioManager::getInstance().playSound("assets/audio/transform.wav", 90.f);
+        }
+    }
+
+    if (mExternalImpulseTimer > 0.f) {
+        mExternalImpulseTimer = std::max(0.f, mExternalImpulseTimer - dt);
     }
 
     // Invulnerability frames update
@@ -182,6 +192,24 @@ void Player::fixedUpdate(float dt, const Map& map, const Physics::PhysicsWorld& 
 
     if (mSpellCooldownTimer > 0.f) {
         mSpellCooldownTimer = std::max(0.f, mSpellCooldownTimer - dt);
+    }
+
+    if (mMeleeCooldownTimer > 0.f) {
+        mMeleeCooldownTimer -= dt;
+        if (mMeleeCooldownTimer <= 0.f) {
+            mMeleeCooldownTimer = 0.f;
+            mComboStep = 0;
+        }
+    }
+
+    if (mComboWindowTimer > 0.f) {
+        mComboWindowTimer -= dt;
+        if (mComboWindowTimer <= 0.f) {
+            mComboWindowTimer = 0.f;
+            if (!mCurrentState || mCurrentState->getType() != PlayerStateType::MeleeAttack) {
+                mComboStep = 0;
+            }
+        }
     }
 
     if (mDebugRaycast.timer > 0.f) {
@@ -257,6 +285,7 @@ void Player::reset(sf::Vector2f position) {
     mGroundSmashImpact = false;
     mGunCooldownTimer = 0.f;
     mSpellCooldownTimer = 0.f;
+    mExternalImpulseTimer = 0.f;
     mDebugRaycast.active = false;
     mDebugRaycast.timer = 0.f;
 
@@ -319,6 +348,11 @@ void Player::setForm(PlayerForm form, const Physics::PhysicsWorld* physicsWorld)
     shape.setPosition(newPos);
     mForm = form;
 
+    if (mForm == PlayerForm::Beast) {
+        mRage = mMaxRage;
+        mRageDecayDelayTimer = 1.5f;
+    }
+
     recalculatePhysicsProperties(physicsWorld);
 }
 //-------------------------------------------------------
@@ -335,8 +369,8 @@ void Player::toggleForm(const Physics::PhysicsWorld* physicsWorld) {
 //-------------------------------------------------------
 
 //------------[Change State - Switch to Specified State Type]-------------------
-void Player::changeState(PlayerStateType newType) {
-    if (mCurrentState && mCurrentState->getType() == newType) {
+void Player::changeState(PlayerStateType newType, bool force) {
+    if (!force && mCurrentState && mCurrentState->getType() == newType) {
         return;
     }
 
@@ -374,6 +408,9 @@ void Player::changeState(PlayerStateType newType) {
             break;
         case PlayerStateType::Parry:
             mCurrentState = mParryState.get();
+            break;
+        case PlayerStateType::Roar:
+            mCurrentState = mRoarState.get();
             break;
     }
 
@@ -571,6 +608,9 @@ float Player::getAcceleration() const {
 
 //------------[Get Friction - Query Form-Specific Ground Friction]-------------------
 float Player::getFriction() const {
+    if (mIsOnIce) {
+        return friction * 0.03f;
+    }
     return friction;
 }
 //-------------------------------------------------------
@@ -736,8 +776,23 @@ void Player::moveWithSweptCCD(sf::Vector2f displacement, const Physics::PhysicsW
             shape.move({0.f, dispY.y * safeToi});
 
             if (displacement.y > 0.f) {
-                isGrounded = true;
-                velocity.y = 0.f;
+                if (hitY.body && hitY.body->getTag() == Physics::ColliderTag::TrampolineModifier) {
+                    float bounceSpeed = std::max(850.f, std::abs(velocity.y) * 1.5f);
+                    velocity.y = -bounceSpeed;
+                    isGrounded = false;
+                    changeState(PlayerStateType::Airborne);
+                    triggerExternalImpulse(0.35f);
+                    setHasAirJump(true);
+                    setHasAirDash(true);
+                    setDashCooldownTimer(0.f);
+                    if (mParticleSystem) {
+                        mParticleSystem->emitPogoBurst(shape.getPosition() + sf::Vector2f(shape.getSize().x * 0.5f, shape.getSize().y));
+                    }
+                    Engine::Audio::AudioManager::getInstance().playSound("assets/audio/pogo_hit.wav", 90.f);
+                } else {
+                    isGrounded = true;
+                    velocity.y = 0.f;
+                }
             } else if (displacement.y < 0.f) {
                 if (!checkCeilingCornerCorrection(physicsWorld)) {
                     velocity.y = 0.f;
@@ -781,6 +836,36 @@ void Player::moveWithSweptCCD(sf::Vector2f displacement, const Physics::PhysicsW
                     isGrounded = true;
                     break;
                 }
+            }
+        }
+    }
+
+    mIsOnIce = false;
+    if (isGrounded) {
+        Physics::AABB groundProbe = Physics::AABB::fromPositionSize(
+            {shape.getPosition().x + 2.f, shape.getPosition().y + shape.getSize().y - 1.f},
+            {shape.getSize().x - 4.f, 5.f}
+        );
+        std::vector<Physics::RigidBody*> groundBodies = physicsWorld.queryAABB(groundProbe, mRigidBody);
+        for (const auto* b : groundBodies) {
+            if (b && b->getTag() == Physics::ColliderTag::IceModifier) {
+                mIsOnIce = true;
+                break;
+            }
+            if (b && b->getTag() == Physics::ColliderTag::TrampolineModifier) {
+                float bounceSpeed = std::max(850.f, std::abs(velocity.y) * 1.5f);
+                velocity.y = -bounceSpeed;
+                isGrounded = false;
+                changeState(PlayerStateType::Airborne);
+                triggerExternalImpulse(0.35f);
+                setHasAirJump(true);
+                setHasAirDash(true);
+                setDashCooldownTimer(0.f);
+                if (mParticleSystem) {
+                    mParticleSystem->emitPogoBurst(shape.getPosition() + sf::Vector2f(shape.getSize().x * 0.5f, shape.getSize().y));
+                }
+                Engine::Audio::AudioManager::getInstance().playSound("assets/audio/pogo_hit.wav", 90.f);
+                break;
             }
         }
     }
@@ -944,7 +1029,7 @@ void Player::setHealth(float hp) {
 
 //------------[Take Damage - Apply Damage with Invulnerability Frames and Knockback]-------------------
 bool Player::takeDamage(float damage, sf::Vector2f knockback) {
-    if (mHurtbox.invulnerable || mInvulnerableTimer > 0.f || isDead()) {
+    if (mHurtbox.invulnerable || mInvulnerableTimer > 0.f || isDead() || mIsParrying) {
         return false;
     }
 
@@ -958,6 +1043,7 @@ bool Player::takeDamage(float damage, sf::Vector2f knockback) {
         isGrounded = false;
         isJumping = true;
         changeState(PlayerStateType::Airborne);
+        triggerExternalImpulse(0.4f);
     }
 
     hasAirJump = true;
@@ -1032,6 +1118,13 @@ void Player::restoreStamina(float amount) {
 }
 //-------------------------------------------------------
 
+//------------[Deduct Stamina - Apply Resource Penalty and Reset Delay]-------------------
+void Player::deductStamina(float amount) {
+    mStamina = std::max(0.f, mStamina - amount);
+    mStaminaRegenDelayTimer = 1.0f;
+}
+//-------------------------------------------------------
+
 //------------[Get Mana - Query Current Mana Points]-------------------
 float Player::getMana() const {
     return mMana;
@@ -1079,7 +1172,25 @@ float Player::getMaxRage() const {
 //------------[Add Rage - Increase Beast Rage Upon Attacks]-------------------
 void Player::addRage(float amount) {
     mRage = std::min(mMaxRage, mRage + amount);
-    mRageDecayDelayTimer = 3.0f;
+    mRageDecayDelayTimer = 1.5f;
+}
+//-------------------------------------------------------
+
+//------------[Reset Rage Decay Delay - Delay Rage Loss Upon Dealing Damage]-------------------
+void Player::resetRageDecayDelay(float delay) {
+    mRageDecayDelayTimer = delay;
+}
+//-------------------------------------------------------
+
+//------------[Trigger External Impulse - Lock Vertical Jump Modifier During Knockback]-------------------
+void Player::triggerExternalImpulse(float duration) {
+    mExternalImpulseTimer = duration;
+}
+//-------------------------------------------------------
+
+//------------[Is External Impulse Active - Query Active Knockback Suspension]-------------------
+bool Player::isExternalImpulseActive() const {
+    return mExternalImpulseTimer > 0.f;
 }
 //-------------------------------------------------------
 
@@ -1214,14 +1325,15 @@ void Player::castActiveSpell() {
     if (mForm != PlayerForm::Witch || !canCastSpell()) return;
 
     if (mActiveSpell == ActiveSpell::PogoOrb) {
-        if (!hasMana(25.f)) return;
-        consumeMana(25.f);
+        if (!hasMana(30.f)) return;
+        consumeMana(30.f);
         setSpellCooldownTimer(0.4f);
         sf::Vector2f pPos = getPosition();
         sf::FloatRect bounds = getBounds();
-        float spawnX = facingRight ? (pPos.x + bounds.size.x + 22.f) : (pPos.x - 22.f);
+        float spawnX = facingRight ? (pPos.x + bounds.size.x * 0.7f) : (pPos.x + bounds.size.x * 0.3f);
         float spawnY = pPos.y + bounds.size.y * 0.45f;
-        spawnPogoOrb({spawnX, spawnY}, {facingRight ? 90.f : -90.f, 0.f});
+        float orbSpeed = facingRight ? 420.f : -420.f;
+        spawnPogoOrb({spawnX, spawnY}, {orbSpeed, 0.f}, 55.f);
         Engine::Audio::AudioManager::getInstance().playSound("assets/audio/pogo_spawn.wav", 85.f);
     } else if (mActiveSpell == ActiveSpell::IceWall) {
         if (!hasMana(25.f)) return;
@@ -1288,16 +1400,6 @@ void Player::upgradeMaxStamina(float amount) {
 
 //------------[Apply Melee Hit Recoil - Apply Backward Repulsion on Successful Hit]-------------------
 void Player::applyMeleeHitRecoil() {
-    float recoilX = facingRight ? -180.f : 180.f;
-    sf::Vector2f vel = getVelocity();
-    vel.x = recoilX;
-    if (!isGrounded) {
-        vel.y = std::min(vel.y, -60.f);
-    }
-    setVelocity(vel);
-    if (mRigidBody) {
-        mRigidBody->setVelocity(vel);
-    }
 }
 //-------------------------------------------------------
 

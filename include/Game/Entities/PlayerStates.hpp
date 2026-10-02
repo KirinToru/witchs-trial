@@ -181,6 +181,8 @@ private:
     float mAttackTimer{0.f};
     bool mHitboxActivated{false};
     bool mHitboxDeactivated{false};
+    int mCurrentComboStep{0};
+    bool mAttackBuffered{false};
 };
 
 class PlayerHeavyStrikeState : public PlayerState {
@@ -327,7 +329,43 @@ public:
 
 private:
     float mParryTimer{0.f};
-    float mParryWindow{0.25f};
-    float mTotalDuration{0.32f};
+    float mParryWindow{0.20f};
+    float mTotalDuration{0.30f};
 };
+
+class PlayerRoarState : public PlayerState {
+public:
+//------------[Virtual Destructor - Roar State Cleanup]-------------------
+    ~PlayerRoarState() override = default;
+//-------------------------------------------------------
+
+//------------[Enter - Initialize Beast Roar Stagger AoE]-------------------
+    void enter(Player& player) override;
+//-------------------------------------------------------
+
+//------------[Exit - Reset Roar State]-------------------
+    void exit(Player& player) override;
+//-------------------------------------------------------
+
+//------------[Handle Input - Process Roar Key Events]-------------------
+    void handleInput(Player& player, const sf::Event& event) override;
+//-------------------------------------------------------
+
+//------------[Fixed Update - Step Roar Duration, Poise Break Sweep & Shockwave]-------------------
+    void fixedUpdate(Player& player, float dt, const Map& map, const Physics::PhysicsWorld& physicsWorld) override;
+//-------------------------------------------------------
+
+//------------[Get Name - Return Roar State Name]-------------------
+    std::string_view getName() const override { return "Roar"; }
+//-------------------------------------------------------
+
+//------------[Get Type - Return Roar State Type]-------------------
+    PlayerStateType getType() const override { return PlayerStateType::Roar; }
+//-------------------------------------------------------
+
+private:
+    float mRoarTimer{0.f};
+    bool mRoarTriggered{false};
+};
+
 

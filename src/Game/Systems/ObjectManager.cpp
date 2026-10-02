@@ -265,11 +265,46 @@ void ObjectManager::renderIceWalls(sf::RenderWindow& window, bool showHitbox) {
 }
 //-------------------------------------------------------
 
+//------------[Spawn Pendulum Trap - Instantiate Swinging Hazard Trap]-------------------
+PendulumTrap* ObjectManager::spawnPendulumTrap(sf::Vector2f pivot, float length, float initialAngle) {
+  auto trap = std::make_unique<PendulumTrap>(pivot, length, initialAngle);
+  PendulumTrap* ptr = trap.get();
+  mPendulumTraps.push_back(std::move(trap));
+  return ptr;
+}
+//-------------------------------------------------------
+
+//------------[Update Pendulum Traps - Step Numerical Integration Loop]-------------------
+void ObjectManager::updatePendulumTraps(float dt) {
+  for (auto& trap : mPendulumTraps) {
+    if (trap) {
+      trap->update(dt);
+    }
+  }
+}
+//-------------------------------------------------------
+
+//------------[Render Pendulum Traps - Draw Ropes and Spiked Bob Hazards]-------------------
+void ObjectManager::renderPendulumTraps(sf::RenderWindow& window, bool showHitbox) {
+  for (auto& trap : mPendulumTraps) {
+    if (trap) {
+      trap->render(window, showHitbox);
+    }
+  }
+}
+//-------------------------------------------------------
+
+//------------[Clear Pendulum Traps - Remove All Active Pendulum Traps]-------------------
+void ObjectManager::clearPendulumTraps() {
+  mPendulumTraps.clear();
+}
+//-------------------------------------------------------
+
 //------------[Update Projectiles - Step Projectile CCD Physics and Lifetimes]-------------------
-void ObjectManager::updateProjectiles(float dt, const Physics::PhysicsWorld& physicsWorld, Engine::Graphics::ParticleSystem* particleSystem) {
+void ObjectManager::updateProjectiles(float dt, const Physics::PhysicsWorld& physicsWorld, Engine::Graphics::ParticleSystem* particleSystem, Player* player) {
   for (auto& proj : mProjectiles) {
     if (proj && !proj->isDead()) {
-      proj->update(dt, physicsWorld, particleSystem);
+      proj->update(dt, physicsWorld, particleSystem, player);
     }
   }
 }
@@ -321,6 +356,7 @@ void ObjectManager::clear() {
   mEnemies.clear();
   mProjectiles.clear();
   mIceWalls.clear();
+  mPendulumTraps.clear();
   mBoss = nullptr;
 }
 //-------------------------------------------------------

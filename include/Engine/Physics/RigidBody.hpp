@@ -18,6 +18,8 @@ enum class ColliderTag : uint8_t {
     OneWayPlatform,
     Hazard,
     MothFloor = Hazard,
+    IceModifier,
+    TrampolineModifier,
     Generic
 };
 
@@ -99,6 +101,12 @@ public:
 //------------[Set Collider Tag - Update Gameplay Classification]-------------------
     void setTag(ColliderTag tag) {
         mTag = tag;
+    }
+//-------------------------------------------------------
+
+//------------[Is Solid - Check If Collider Acts As Solid Obstacle]-------------------
+    bool isSolid() const {
+        return mTag == ColliderTag::SolidWall || mTag == ColliderTag::IceModifier || mTag == ColliderTag::TrampolineModifier;
     }
 //-------------------------------------------------------
 

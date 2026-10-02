@@ -648,6 +648,12 @@ float Enemy::getStaggerDuration() const {
 }
 //-------------------------------------------------------
 
+//------------[Set Stagger Duration - Update Stun Duration Upon Posture Break]-------------------
+void Enemy::setStaggerDuration(float d) {
+    mStaggerDuration = d;
+}
+//-------------------------------------------------------
+
 //------------[Get Stagger Timer - Query Stagger Elapsed Time]-------------------
 float Enemy::getStaggerTimer() const {
     return mStaggerTimer;

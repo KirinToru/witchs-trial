@@ -72,6 +72,14 @@ public:
     void emitDebrisBurst(sf::Vector2f position);
 //-------------------------------------------------------
 
+//------------[Emit Parry Sparks - Spawn Sharp Metallic Deflection Spark Particles]-------------------
+    void emitParrySparks(sf::Vector2f position);
+//-------------------------------------------------------
+
+//------------[Emit Roar Shockwave - Spawn Expanding Radial Shockwave Ring]-------------------
+    void emitRoarShockwave(sf::Vector2f position);
+//-------------------------------------------------------
+
 private:
     std::vector<Particle> mParticles;
     size_t mPoolIndex{0};

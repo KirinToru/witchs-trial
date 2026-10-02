@@ -2,6 +2,7 @@
 #include <Game/Entities/Player.hpp>
 #include <Game/Game.hpp>
 #include <Engine/Audio/AudioManager.hpp>
+#include <Engine/Graphics/FontManager.hpp>
 #include <SFML/Window/Keyboard.hpp>
 #include <iomanip>
 #include <sstream>
@@ -9,10 +10,7 @@
 //------------[Constructor - Initialize Equipment Menu and HUD Panels]-------------------
 EquipmentState::EquipmentState(Game* game, Player* player)
     : State(game), mPlayer(player) {
-    mFontLoaded = mFont.openFromFile("assets/fonts/trebuc.ttf");
-    if (!mFontLoaded) {
-        mFontLoaded = mFont.openFromFile("assets/fonts/arial.ttf");
-    }
+    mFontLoaded = true;
 
     mDarkOverlay.setFillColor(sf::Color(10, 8, 18, 210));
 
@@ -24,9 +22,8 @@ EquipmentState::EquipmentState(Game* game, Player* player)
     mHeaderBar.setOutlineColor(sf::Color(200, 160, 80, 200));
     mHeaderBar.setOutlineThickness(1.f);
 
-    // Initial Grimoire Spells
-    mSpells.push_back({"Arcane Gun (K)", "18 MP", "Fast auto-aim bullet with immediate backward+upward recoil burst.", true});
-    mSpells.push_back({"Pogo Magic Orb (L)", "25 MP", "Slow-moving aerial orb. Strike with melee (J) to super-bounce & reset dash.", mPlayer && mPlayer->getActiveSpell() == ActiveSpell::PogoOrb});
+    mSpells.push_back({"Arcane Gun (K)", "15 MP", "Fast auto-aim bullet with immediate backward+upward recoil burst.", true});
+    mSpells.push_back({"Pogo Magic Orb (L)", "30 MP", "Slow-moving aerial orb. Strike with melee (J) to super-bounce & reset dash.", mPlayer && mPlayer->getActiveSpell() == ActiveSpell::PogoOrb});
     mSpells.push_back({"Ice Wall (L)", "25 MP", "Solid crystalline ice pillar in front of player for wall-jumping. Lasts 4s.", mPlayer && mPlayer->getActiveSpell() == ActiveSpell::IceWall});
     mSpells.push_back({"Thunder Strike (L)", "20 MP", "Fast lightning bolt that stuns and electrifies foes. Touch to shock-jump.", mPlayer && mPlayer->getActiveSpell() == ActiveSpell::Thunder});
     mSpells.push_back({"Spirit Slash (J)", "20 STA", "Rapid melee cleave. Slices physical barriers and deflects pogo orbs.", true});
@@ -177,26 +174,24 @@ void EquipmentState::render(sf::RenderWindow& window) {
     window.draw(mMainPanel);
     window.draw(mHeaderBar);
 
-    if (!mFontLoaded) {
-        window.setView(oldView);
-        return;
-    }
+    const auto& titleFont = Engine::Graphics::FontManager::getInstance().getFont(Engine::Graphics::FontType::Title);
+    const auto& pixelFont = Engine::Graphics::FontManager::getInstance().getFont(Engine::Graphics::FontType::Pixel);
 
     sf::FloatRect panelBounds = mMainPanel.getGlobalBounds();
 
     // Title
-    sf::Text titleText(mFont, "EQUIPMENT & GRIMOIRE", 22);
+    sf::Text titleText(titleFont, "EQUIPMENT & GRIMOIRE", 20);
     titleText.setFillColor(sf::Color(255, 220, 120));
     titleText.setStyle(sf::Text::Bold);
-    titleText.setPosition({panelBounds.position.x + 24.f, panelBounds.position.y + 12.f});
+    titleText.setPosition(Engine::Graphics::roundPosition({panelBounds.position.x + 24.f, panelBounds.position.y + 12.f}));
     window.draw(titleText);
 
     // Tab Headers
     const char* tabNames[3] = {"[1] Grimoire Magic", "[2] Stats & Upgrades", "[3] Relics & Charms"};
     for (int i = 0; i < 3; ++i) {
-        sf::Text tabText(mFont, tabNames[i], 16);
+        sf::Text tabText(titleFont, tabNames[i], 15);
         float tabX = panelBounds.position.x + 320.f + i * 175.f;
-        tabText.setPosition({tabX, panelBounds.position.y + 16.f});
+        tabText.setPosition(Engine::Graphics::roundPosition({tabX, panelBounds.position.y + 16.f}));
 
         if (static_cast<int>(mCurrentTab) == i) {
             tabText.setFillColor(sf::Color(140, 240, 255));
@@ -218,9 +213,9 @@ void EquipmentState::render(sf::RenderWindow& window) {
 
     // Footer Navigation Help
     std::string footerStr = "[TAB/Left/Right] Switch Tab  |  [W/S] Navigate  |  [ENTER/SPACE] Equip/Upgrade  |  [I/ESC] Close";
-    sf::Text footerText(mFont, footerStr, 13);
+    sf::Text footerText(pixelFont, footerStr, 12);
     footerText.setFillColor(sf::Color(160, 160, 180));
-    footerText.setPosition({panelBounds.position.x + 24.f, panelBounds.position.y + panelBounds.size.y - 28.f});
+    footerText.setPosition(Engine::Graphics::roundPosition({panelBounds.position.x + 24.f, panelBounds.position.y + panelBounds.size.y - 28.f}));
     window.draw(footerText);
 
     window.setView(oldView);
@@ -229,6 +224,9 @@ void EquipmentState::render(sf::RenderWindow& window) {
 
 //------------[Render Grimoire Panel - Draw Spell Selection Slots and Descriptions]-------------------
 void EquipmentState::renderGrimoirePanel(sf::RenderWindow& window) {
+    const auto& titleFont = Engine::Graphics::FontManager::getInstance().getFont(Engine::Graphics::FontType::Title);
+    const auto& pixelFont = Engine::Graphics::FontManager::getInstance().getFont(Engine::Graphics::FontType::Pixel);
+
     sf::FloatRect panelBounds = mMainPanel.getGlobalBounds();
     float startX = panelBounds.position.x + 30.f;
     float startY = panelBounds.position.y + 70.f;
@@ -238,7 +236,7 @@ void EquipmentState::renderGrimoirePanel(sf::RenderWindow& window) {
         float cardY = startY + i * 82.f;
 
         sf::RectangleShape card({panelBounds.size.x - 60.f, 74.f});
-        card.setPosition({startX, cardY});
+        card.setPosition(Engine::Graphics::roundPosition({startX, cardY}));
         if (selected) {
             card.setFillColor(sf::Color(45, 38, 70, 240));
             card.setOutlineColor(sf::Color(255, 215, 100));
@@ -251,27 +249,27 @@ void EquipmentState::renderGrimoirePanel(sf::RenderWindow& window) {
         window.draw(card);
 
         // Spell Name & Cost
-        sf::Text nameText(mFont, mSpells[i].name, 17);
+        sf::Text nameText(titleFont, mSpells[i].name, 16);
         nameText.setFillColor(selected ? sf::Color(255, 235, 160) : sf::Color(230, 230, 240));
         nameText.setStyle(sf::Text::Bold);
-        nameText.setPosition({startX + 16.f, cardY + 8.f});
+        nameText.setPosition(Engine::Graphics::roundPosition({startX + 16.f, cardY + 8.f}));
         window.draw(nameText);
 
-        sf::Text costText(mFont, mSpells[i].cost, 15);
+        sf::Text costText(pixelFont, mSpells[i].cost, 13);
         costText.setFillColor(sf::Color(120, 200, 255));
-        costText.setPosition({startX + 280.f, cardY + 10.f});
+        costText.setPosition(Engine::Graphics::roundPosition({startX + 280.f, cardY + 11.f}));
         window.draw(costText);
 
         // Status badge
-        sf::Text statusText(mFont, mSpells[i].isEquipped ? "[ EQUIPPED ]" : "[ AVAILABLE ]", 14);
+        sf::Text statusText(pixelFont, mSpells[i].isEquipped ? "[ EQUIPPED ]" : "[ AVAILABLE ]", 12);
         statusText.setFillColor(mSpells[i].isEquipped ? sf::Color(100, 255, 140) : sf::Color(170, 170, 180));
-        statusText.setPosition({startX + panelBounds.size.x - 190.f, cardY + 10.f});
+        statusText.setPosition(Engine::Graphics::roundPosition({startX + panelBounds.size.x - 190.f, cardY + 11.f}));
         window.draw(statusText);
 
         // Description
-        sf::Text descText(mFont, mSpells[i].description, 14);
+        sf::Text descText(pixelFont, mSpells[i].description, 12);
         descText.setFillColor(sf::Color(190, 190, 210));
-        descText.setPosition({startX + 16.f, cardY + 38.f});
+        descText.setPosition(Engine::Graphics::roundPosition({startX + 16.f, cardY + 38.f}));
         window.draw(descText);
     }
 }
@@ -279,6 +277,9 @@ void EquipmentState::renderGrimoirePanel(sf::RenderWindow& window) {
 
 //------------[Render Attributes Panel - Draw Player Stats and Upgrade Buttons]-------------------
 void EquipmentState::renderAttributesPanel(sf::RenderWindow& window) {
+    const auto& titleFont = Engine::Graphics::FontManager::getInstance().getFont(Engine::Graphics::FontType::Title);
+    const auto& pixelFont = Engine::Graphics::FontManager::getInstance().getFont(Engine::Graphics::FontType::Pixel);
+
     sf::FloatRect panelBounds = mMainPanel.getGlobalBounds();
     float startX = panelBounds.position.x + 30.f;
     float startY = panelBounds.position.y + 70.f;
@@ -286,10 +287,10 @@ void EquipmentState::renderAttributesPanel(sf::RenderWindow& window) {
     // Skill Points Header
     int points = mPlayer ? mPlayer->getSkillPoints() : 0;
     std::string pointsStr = "Available Shard Points: " + std::to_string(points);
-    sf::Text pointsText(mFont, pointsStr, 18);
+    sf::Text pointsText(titleFont, pointsStr, 17);
     pointsText.setFillColor(sf::Color(255, 215, 100));
     pointsText.setStyle(sf::Text::Bold);
-    pointsText.setPosition({startX, startY});
+    pointsText.setPosition(Engine::Graphics::roundPosition({startX, startY}));
     window.draw(pointsText);
 
     struct StatRow {
@@ -312,7 +313,7 @@ void EquipmentState::renderAttributesPanel(sf::RenderWindow& window) {
         float rowY = startY + 50.f + i * 95.f;
 
         sf::RectangleShape box({panelBounds.size.x - 60.f, 80.f});
-        box.setPosition({startX, rowY});
+        box.setPosition(Engine::Graphics::roundPosition({startX, rowY}));
         if (selected) {
             box.setFillColor(sf::Color(45, 38, 70, 240));
             box.setOutlineColor(sf::Color(255, 215, 100));
@@ -327,15 +328,15 @@ void EquipmentState::renderAttributesPanel(sf::RenderWindow& window) {
         // Stat Title & Values
         std::ostringstream ss;
         ss << statRows[i].name << " : " << static_cast<int>(statRows[i].maxVal);
-        sf::Text labelText(mFont, ss.str(), 17);
+        sf::Text labelText(titleFont, ss.str(), 16);
         labelText.setFillColor(selected ? sf::Color(255, 235, 160) : sf::Color(230, 230, 240));
-        labelText.setPosition({startX + 16.f, rowY + 10.f});
+        labelText.setPosition(Engine::Graphics::roundPosition({startX + 16.f, rowY + 10.f}));
         window.draw(labelText);
 
         // Progress Gauge Background
         float gaugeW = 320.f;
         sf::RectangleShape gaugeBg({gaugeW, 14.f});
-        gaugeBg.setPosition({startX + 16.f, rowY + 44.f});
+        gaugeBg.setPosition(Engine::Graphics::roundPosition({startX + 16.f, rowY + 44.f}));
         gaugeBg.setFillColor(sf::Color(20, 20, 30));
         gaugeBg.setOutlineColor(sf::Color(70, 70, 90));
         gaugeBg.setOutlineThickness(1.f);
@@ -344,14 +345,14 @@ void EquipmentState::renderAttributesPanel(sf::RenderWindow& window) {
         // Progress Gauge Fill
         float fillRatio = std::clamp(statRows[i].maxVal / 250.f, 0.1f, 1.0f);
         sf::RectangleShape gaugeFill({gaugeW * fillRatio, 14.f});
-        gaugeFill.setPosition({startX + 16.f, rowY + 44.f});
+        gaugeFill.setPosition(Engine::Graphics::roundPosition({startX + 16.f, rowY + 44.f}));
         gaugeFill.setFillColor(statRows[i].barColor);
         window.draw(gaugeFill);
 
         // Upgrade button prompt
-        sf::Text btnText(mFont, "[ENTER: Upgrade " + statRows[i].upgradeText + "]", 15);
+        sf::Text btnText(pixelFont, "[ENTER: Upgrade " + statRows[i].upgradeText + "]", 13);
         btnText.setFillColor(points > 0 ? (selected ? sf::Color(255, 220, 100) : sf::Color(160, 240, 160)) : sf::Color(120, 120, 130));
-        btnText.setPosition({startX + panelBounds.size.x - 310.f, rowY + 28.f});
+        btnText.setPosition(Engine::Graphics::roundPosition({startX + panelBounds.size.x - 310.f, rowY + 28.f}));
         window.draw(btnText);
     }
 }
@@ -359,6 +360,9 @@ void EquipmentState::renderAttributesPanel(sf::RenderWindow& window) {
 
 //------------[Render Relics Panel - Draw Equipment Inventory and Charms]-------------------
 void EquipmentState::renderRelicsPanel(sf::RenderWindow& window) {
+    const auto& titleFont = Engine::Graphics::FontManager::getInstance().getFont(Engine::Graphics::FontType::Title);
+    const auto& pixelFont = Engine::Graphics::FontManager::getInstance().getFont(Engine::Graphics::FontType::Pixel);
+
     sf::FloatRect panelBounds = mMainPanel.getGlobalBounds();
     float startX = panelBounds.position.x + 30.f;
     float startY = panelBounds.position.y + 70.f;
@@ -368,7 +372,7 @@ void EquipmentState::renderRelicsPanel(sf::RenderWindow& window) {
         float cardY = startY + i * 90.f;
 
         sf::RectangleShape card({panelBounds.size.x - 60.f, 78.f});
-        card.setPosition({startX, cardY});
+        card.setPosition(Engine::Graphics::roundPosition({startX, cardY}));
         if (selected) {
             card.setFillColor(sf::Color(45, 38, 70, 240));
             card.setOutlineColor(sf::Color(255, 215, 100));
@@ -381,27 +385,27 @@ void EquipmentState::renderRelicsPanel(sf::RenderWindow& window) {
         window.draw(card);
 
         // Relic Name & Rarity
-        sf::Text nameText(mFont, mRelics[i].name, 18);
+        sf::Text nameText(titleFont, mRelics[i].name, 17);
         nameText.setFillColor(selected ? sf::Color(255, 235, 160) : sf::Color(230, 230, 240));
         nameText.setStyle(sf::Text::Bold);
-        nameText.setPosition({startX + 16.f, cardY + 10.f});
+        nameText.setPosition(Engine::Graphics::roundPosition({startX + 16.f, cardY + 10.f}));
         window.draw(nameText);
 
-        sf::Text rarityText(mFont, "(" + mRelics[i].rarity + ")", 14);
+        sf::Text rarityText(pixelFont, "(" + mRelics[i].rarity + ")", 12);
         rarityText.setFillColor(sf::Color(220, 160, 255));
-        rarityText.setPosition({startX + 280.f, cardY + 12.f});
+        rarityText.setPosition(Engine::Graphics::roundPosition({startX + 280.f, cardY + 12.f}));
         window.draw(rarityText);
 
         // Status badge
-        sf::Text statusText(mFont, mRelics[i].isEquipped ? "[ EQUIPPED ]" : "[ UNEQUIPPED ]", 14);
+        sf::Text statusText(pixelFont, mRelics[i].isEquipped ? "[ EQUIPPED ]" : "[ UNEQUIPPED ]", 12);
         statusText.setFillColor(mRelics[i].isEquipped ? sf::Color(100, 255, 140) : sf::Color(170, 170, 180));
-        statusText.setPosition({startX + panelBounds.size.x - 190.f, cardY + 12.f});
+        statusText.setPosition(Engine::Graphics::roundPosition({startX + panelBounds.size.x - 190.f, cardY + 12.f}));
         window.draw(statusText);
 
         // Effect
-        sf::Text effectText(mFont, mRelics[i].effect, 14);
+        sf::Text effectText(pixelFont, mRelics[i].effect, 12);
         effectText.setFillColor(sf::Color(190, 190, 210));
-        effectText.setPosition({startX + 16.f, cardY + 42.f});
+        effectText.setPosition(Engine::Graphics::roundPosition({startX + 16.f, cardY + 42.f}));
         window.draw(effectText);
     }
 }

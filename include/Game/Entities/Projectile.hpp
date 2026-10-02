@@ -18,6 +18,8 @@ enum class ProjectileType {
     Thunder
 };
 
+class Player;
+
 class Projectile {
 public:
 //------------[Constructor - Initialize Magic Projectile with Type Classification]-------------------
@@ -33,43 +35,7 @@ public:
 //-------------------------------------------------------
 
 //------------[Update - Step Trajectory and World CCD Collision]-------------------
-    void update(float dt, const Physics::PhysicsWorld& physicsWorld, Engine::Graphics::ParticleSystem* particleSystem = nullptr) {
-        if (mDead) return;
-
-        mLifetime += dt;
-        if (mLifetime >= mMaxLifetime) {
-            mDead = true;
-            return;
-        }
-
-        if (mType == ProjectileType::PogoOrb && !mPogoStruck) {
-            mVelocity.y = 0.f;
-        }
-
-        if (particleSystem && mType == ProjectileType::PogoOrb) {
-            particleSystem->emitPogoTrail(mPosition);
-        }
-
-        sf::Vector2f moveDelta = mVelocity * dt;
-        Physics::AABB currentAABB = getAABB();
-
-        for (const auto& body : physicsWorld.getBodies()) {
-            if (!body || body->getType() != Physics::BodyType::Static || body->isOneWay()) continue;
-            if (currentAABB.intersects(body->getWorldAABB())) {
-                mDead = true;
-                return;
-            }
-        }
-
-        Physics::SweptHit hit = physicsWorld.sweepTest(currentAABB, moveDelta, nullptr, false);
-        if (hit.hit && hit.toi <= 1.0f && hit.body && hit.body->getType() == Physics::BodyType::Static && !hit.body->isOneWay()) {
-            mPosition += moveDelta * hit.toi;
-            mDead = true;
-            return;
-        }
-
-        mPosition += moveDelta;
-    }
+    void update(float dt, const Physics::PhysicsWorld& physicsWorld, Engine::Graphics::ParticleSystem* particleSystem = nullptr, Player* player = nullptr);
 //-------------------------------------------------------
 
 //------------[Render - Draw Magic Bolt, Gun Shot or Pogo Orb and Hitbox Visualization]-------------------
@@ -244,11 +210,35 @@ public:
     void strikePogo(float launchSpeedX) {
         mPogoStruck = true;
         mVelocity = {launchSpeedX, -40.f};
-        mDamage = 75.f;
+        mDamage = 95.f;
         mPoiseDamage = 60.f;
         mKnockback = {launchSpeedX > 0.f ? 350.f : -350.f, -80.f};
         mLifetime = 0.f;
         mMaxLifetime = 2.5f;
+    }
+//-------------------------------------------------------
+
+//------------[Has Player Exited - Query Safe Exit From Cast Overlap]-------------------
+    bool hasPlayerExited() const {
+        return mHasPlayerExited;
+    }
+//-------------------------------------------------------
+
+//------------[Set Player Exited - Enable Self-Damage Hazard]-------------------
+    void setPlayerExited(bool exited) {
+        mHasPlayerExited = exited;
+    }
+//-------------------------------------------------------
+
+//------------[Has Player Safe Exited - Backwards-Compatible Forwarder]-------------------
+    bool hasPlayerSafeExited() const {
+        return mHasPlayerExited;
+    }
+//-------------------------------------------------------
+
+//------------[Set Player Safe Exited - Backwards-Compatible Forwarder]-------------------
+    void setPlayerSafeExited(bool exited) {
+        mHasPlayerExited = exited;
     }
 //-------------------------------------------------------
 
@@ -276,4 +266,5 @@ private:
     float mMaxLifetime{3.0f};
     bool mDead{false};
     bool mPogoStruck{false};
+    bool mHasPlayerExited{false};
 };

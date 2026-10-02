@@ -27,7 +27,8 @@ enum class PlayerStateType : uint8_t {
     HeavyStrike,
     CastSpell,
     Gun,
-    Parry
+    Parry,
+    Roar
 };
 
 class PlayerState {

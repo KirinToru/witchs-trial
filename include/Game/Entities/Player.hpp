@@ -88,7 +88,7 @@ public:
 //-------------------------------------------------------
 
 //------------[Change State - Switch to Specified State Type]-------------------
-    void changeState(PlayerStateType newType);
+    void changeState(PlayerStateType newType, bool force = false);
 //-------------------------------------------------------
 
 //------------[Get Current State - Query Active State Pointer]-------------------
@@ -356,6 +356,10 @@ public:
     void restoreStamina(float amount);
 //-------------------------------------------------------
 
+//------------[Deduct Stamina - Apply Resource Penalty and Reset Delay]-------------------
+    void deductStamina(float amount);
+//-------------------------------------------------------
+
 //------------[Get Mana - Query Current Mana Points]-------------------
     float getMana() const;
 //-------------------------------------------------------
@@ -386,6 +390,18 @@ public:
 
 //------------[Add Rage - Increase Beast Rage Upon Attacks]-------------------
     void addRage(float amount);
+//-------------------------------------------------------
+
+//------------[Reset Rage Decay Delay - Delay Rage Loss Upon Dealing Damage]-------------------
+    void resetRageDecayDelay(float delay = 1.5f);
+//-------------------------------------------------------
+
+//------------[Trigger External Impulse - Lock Vertical Jump Modifier During Knockback]-------------------
+    void triggerExternalImpulse(float duration = 0.4f);
+//-------------------------------------------------------
+
+//------------[Is External Impulse Active - Query Active Knockback Suspension]-------------------
+    bool isExternalImpulseActive() const;
 //-------------------------------------------------------
 
 //------------[Consume Rage - Spend Beast Rage For Heavy Strikes]-------------------
@@ -459,7 +475,7 @@ public:
 //-------------------------------------------------------
 
 //------------[Spawn Pogo Orb - Dispatch Pogo Orb Creation to Object Manager]-------------------
-    void spawnPogoOrb(sf::Vector2f position, sf::Vector2f velocity, float damage = 25.f);
+    void spawnPogoOrb(sf::Vector2f position, sf::Vector2f velocity, float damage = 55.f);
 //-------------------------------------------------------
 
 //------------[Spawn Gun Projectile - Dispatch Fast Gun Shot to Object Manager]-------------------
@@ -561,6 +577,46 @@ public:
     }
 //-------------------------------------------------------
 
+//------------[Get Combo Step - Query Current Melee Combo Index]-------------------
+    int getComboStep() const { return mComboStep; }
+//-------------------------------------------------------
+
+//------------[Set Combo Step - Update Melee Combo Step]-------------------
+    void setComboStep(int step) { mComboStep = step; }
+//-------------------------------------------------------
+
+//------------[Reset Combo - Clear Active Combo Chain State]-------------------
+    void resetCombo() { mComboStep = 0; mComboWindowTimer = 0.f; }
+//-------------------------------------------------------
+
+//------------[Get Combo Window Timer - Query Chain Window Expiry Timer]-------------------
+    float getComboWindowTimer() const { return mComboWindowTimer; }
+//-------------------------------------------------------
+
+//------------[Set Combo Window Timer - Update Chain Window Expiry Timer]-------------------
+    void setComboWindowTimer(float t) { mComboWindowTimer = t; }
+//-------------------------------------------------------
+
+//------------[Get Melee Cooldown Timer - Query Finisher Attack Delay Timer]-------------------
+    float getMeleeCooldownTimer() const { return mMeleeCooldownTimer; }
+//-------------------------------------------------------
+
+//------------[Set Melee Cooldown Timer - Update Finisher Attack Delay Timer]-------------------
+    void setMeleeCooldownTimer(float t) { mMeleeCooldownTimer = t; }
+//-------------------------------------------------------
+
+//------------[Can Melee Attack - Check If Attack Cooldown Has Elapsed]-------------------
+    bool canMeleeAttack() const { return mMeleeCooldownTimer <= 0.f; }
+//-------------------------------------------------------
+
+//------------[Is On Ice - Query Ice Ground Modifier Status]-------------------
+    bool isOnIce() const { return mIsOnIce; }
+//-------------------------------------------------------
+
+//------------[Set Is On Ice - Update Ice Ground Modifier Flag]-------------------
+    void setIsOnIce(bool onIce) { mIsOnIce = onIce; }
+//-------------------------------------------------------
+
 private:
 //------------[Recalculate Physics Properties - Update AABB, Mass, and Constants for Active Form]-------------------
     void recalculatePhysicsProperties(const Physics::PhysicsWorld* physicsWorld = nullptr);
@@ -583,6 +639,7 @@ private:
     std::unique_ptr<PlayerCastSpellState> mCastSpellState;
     std::unique_ptr<PlayerGunState> mGunState;
     std::unique_ptr<PlayerParryState> mParryState;
+    std::unique_ptr<PlayerRoarState> mRoarState;
     PlayerState* mCurrentState{nullptr};
     ObjectManager* mObjectManager{nullptr};
     Engine::Graphics::ParticleSystem* mParticleSystem{nullptr};
@@ -607,7 +664,8 @@ private:
     float mRage{0.f};
     float mMaxRage{100.f};
     float mRageDecayDelayTimer{0.f};
-    float mRageDecayRate{10.f};
+    float mRageDecayRate{18.f};
+    float mExternalImpulseTimer{0.f};
 
     // Combat Collision Boxes
     Combat::Hurtbox mHurtbox;
@@ -665,4 +723,8 @@ private:
     DebugRaycast mDebugRaycast;
     bool mAutoJumpEnabled{false};
     bool mGroundSmashImpact{false};
+    int mComboStep{0};
+    float mComboWindowTimer{0.f};
+    float mMeleeCooldownTimer{0.f};
+    bool mIsOnIce{false};
 };

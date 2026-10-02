@@ -113,4 +113,18 @@ private:
   float mHoldRTimer{0.f};
   float mResetFadeAlpha{0.f};
   float mResetRepeatTimer{0.f};
+
+//------------[Spawn Damage Popup - Spawn Floating Damage Text Indicator]-------------------
+  void spawnDamagePopup(sf::Vector2f worldPos, float damage, bool isCrit = false);
+//-------------------------------------------------------
+
+  struct DamagePopup {
+    sf::Vector2f position;
+    std::string text;
+    float timer{0.5f};
+    float maxDuration{0.5f};
+    sf::Color color{255, 230, 100};
+    bool isCrit{false};
+  };
+  std::vector<DamagePopup> mDamagePopups;
 };

@@ -39,12 +39,12 @@ void PlayerIdleState::fixedUpdate(Player& player, float dt, const Map& map, cons
 
     sf::Vector2f vel = player.getVelocity();
 
-    // Apply ground friction to bring residual horizontal momentum to a halt
+    float f = player.isOnIce() ? (player.getFriction() * 0.03f) : player.getFriction();
     if (vel.x > 0.f) {
-        vel.x -= player.getFriction() * dt;
+        vel.x -= f * dt;
         if (vel.x < 0.f) vel.x = 0.f;
     } else if (vel.x < 0.f) {
-        vel.x += player.getFriction() * dt;
+        vel.x += f * dt;
         if (vel.x > 0.f) vel.x = 0.f;
     }
     player.setVelocity(vel);
@@ -74,7 +74,7 @@ void PlayerIdleState::fixedUpdate(Player& player, float dt, const Map& map, cons
 
     // Parry action: C
     bool parryPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C);
-    if (parryPressed) {
+    if (parryPressed && player.getForm() == PlayerForm::Witch) {
         player.changeState(PlayerStateType::Parry);
         return;
     }
@@ -83,7 +83,7 @@ void PlayerIdleState::fixedUpdate(Player& player, float dt, const Map& map, cons
     bool attackPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::J);
     if (attackPressed) {
         if (player.getForm() == PlayerForm::Witch) {
-            if (player.consumeStamina(20.f)) {
+            if (player.canMeleeAttack() && player.consumeStamina(20.f)) {
                 player.changeState(PlayerStateType::MeleeAttack);
                 return;
             }
@@ -95,15 +95,20 @@ void PlayerIdleState::fixedUpdate(Player& player, float dt, const Map& map, cons
 
     // Gun action: K (Witch Form)
     bool gunPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::K);
-    if (gunPressed && player.getForm() == PlayerForm::Witch && player.hasMana(18.f) && player.canFireGun()) {
+    if (gunPressed && player.getForm() == PlayerForm::Witch && player.hasMana(15.f) && player.canFireGun()) {
         player.changeState(PlayerStateType::Gun);
         return;
     }
 
-    // Magic Spell action: L (Witch Form)
+    // Magic Spell action / Roar: L
     bool spellPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::L);
-    if (spellPressed && player.getForm() == PlayerForm::Witch && player.canCastSpell()) {
-        player.castActiveSpell();
+    if (spellPressed) {
+        if (player.getForm() == PlayerForm::Witch && player.canCastSpell()) {
+            player.castActiveSpell();
+        } else if (player.getForm() == PlayerForm::Beast && player.canCastSpell() && player.getRage() >= 25.f) {
+            player.changeState(PlayerStateType::Roar);
+            return;
+        }
     }
 
     // Horizontal movement input & facing direction
@@ -185,7 +190,7 @@ void PlayerRunState::fixedUpdate(Player& player, float dt, const Map& map, const
 
     // Parry action: C
     bool parryPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C);
-    if (parryPressed) {
+    if (parryPressed && player.getForm() == PlayerForm::Witch) {
         player.changeState(PlayerStateType::Parry);
         return;
     }
@@ -194,7 +199,7 @@ void PlayerRunState::fixedUpdate(Player& player, float dt, const Map& map, const
     bool attackPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::J);
     if (attackPressed) {
         if (player.getForm() == PlayerForm::Witch) {
-            if (player.consumeStamina(20.f)) {
+            if (player.canMeleeAttack() && player.consumeStamina(20.f)) {
                 player.changeState(PlayerStateType::MeleeAttack);
                 return;
             }
@@ -206,15 +211,20 @@ void PlayerRunState::fixedUpdate(Player& player, float dt, const Map& map, const
 
     // Gun action: K (Witch Form)
     bool gunPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::K);
-    if (gunPressed && player.getForm() == PlayerForm::Witch && player.hasMana(18.f) && player.canFireGun()) {
+    if (gunPressed && player.getForm() == PlayerForm::Witch && player.hasMana(15.f) && player.canFireGun()) {
         player.changeState(PlayerStateType::Gun);
         return;
     }
 
-    // Magic Spell action: L (Witch Form)
+    // Magic Spell action / Roar: L
     bool spellPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::L);
-    if (spellPressed && player.getForm() == PlayerForm::Witch && player.canCastSpell()) {
-        player.castActiveSpell();
+    if (spellPressed) {
+        if (player.getForm() == PlayerForm::Witch && player.canCastSpell()) {
+            player.castActiveSpell();
+        } else if (player.getForm() == PlayerForm::Beast && player.canCastSpell() && player.getRage() >= 25.f) {
+            player.changeState(PlayerStateType::Roar);
+            return;
+        }
     }
 
     // Horizontal movement acceleration
@@ -232,12 +242,12 @@ void PlayerRunState::fixedUpdate(Player& player, float dt, const Map& map, const
     } else if (right && !left) {
         vel.x += player.getAcceleration() * dt;
     } else {
-        // No horizontal input, apply ground friction
+        float f = player.isOnIce() ? (player.getFriction() * 0.03f) : player.getFriction();
         if (vel.x > 0.f) {
-            vel.x -= player.getFriction() * dt;
+            vel.x -= f * dt;
             if (vel.x < 0.f) vel.x = 0.f;
         } else if (vel.x < 0.f) {
-            vel.x += player.getFriction() * dt;
+            vel.x += f * dt;
             if (vel.x > 0.f) vel.x = 0.f;
         }
 
@@ -310,7 +320,7 @@ void PlayerAirborneState::fixedUpdate(Player& player, float dt, const Map& map, 
 
     // Parry action in air: C
     bool parryPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C);
-    if (parryPressed) {
+    if (parryPressed && player.getForm() == PlayerForm::Witch) {
         player.changeState(PlayerStateType::Parry);
         return;
     }
@@ -319,7 +329,7 @@ void PlayerAirborneState::fixedUpdate(Player& player, float dt, const Map& map, 
     bool attackPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::J);
     if (attackPressed) {
         if (player.getForm() == PlayerForm::Witch) {
-            if (player.consumeStamina(20.f)) {
+            if (player.canMeleeAttack() && player.consumeStamina(20.f)) {
                 player.changeState(PlayerStateType::MeleeAttack);
                 return;
             }
@@ -331,15 +341,20 @@ void PlayerAirborneState::fixedUpdate(Player& player, float dt, const Map& map, 
 
     // Gun action in air: K (Witch Form)
     bool gunPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::K);
-    if (gunPressed && player.getForm() == PlayerForm::Witch && player.hasMana(18.f) && player.canFireGun()) {
+    if (gunPressed && player.getForm() == PlayerForm::Witch && player.hasMana(15.f) && player.canFireGun()) {
         player.changeState(PlayerStateType::Gun);
         return;
     }
 
-    // Magic Spell action in air: L (Witch Form)
+    // Magic Spell action / Roar in air: L
     bool spellPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::L);
-    if (spellPressed && player.getForm() == PlayerForm::Witch && player.canCastSpell()) {
-        player.castActiveSpell();
+    if (spellPressed) {
+        if (player.getForm() == PlayerForm::Witch && player.canCastSpell()) {
+            player.castActiveSpell();
+        } else if (player.getForm() == PlayerForm::Beast && player.canCastSpell() && player.getRage() >= 25.f) {
+            player.changeState(PlayerStateType::Roar);
+            return;
+        }
     }
 
     bool left = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A);
@@ -415,16 +430,20 @@ void PlayerAirborneState::fixedUpdate(Player& player, float dt, const Map& map, 
             player.setJumpBufferTimer(0.f);
         }
     } else {
-        // Normal aerial gravity simulation
         float grav = player.getGravity();
 
-        // Apex hang time (reduced gravity near jump apex)
-        if (player.getIsJumping() && std::abs(vel.y) < 60.f) {
-            grav *= 0.5f;
-        } else if (vel.y > 0.f) {
-            grav *= 1.25f; // Fall faster for snappy platforming feel
-        } else if (!jumpPressed && vel.y < 0.f) {
-            grav *= 2.0f; // Variable jump height cut-off when releasing Space
+        if (!player.isExternalImpulseActive()) {
+            if (player.getIsJumping() && std::abs(vel.y) < 60.f) {
+                grav *= 0.5f;
+            } else if (vel.y > 0.f) {
+                grav *= 1.25f;
+            } else if (!jumpPressed && vel.y < 0.f) {
+                grav *= 2.0f;
+            }
+        } else {
+            if (vel.y > 0.f) {
+                grav *= 1.25f;
+            }
         }
 
         if (vel.y < 0.f) {
@@ -434,14 +453,22 @@ void PlayerAirborneState::fixedUpdate(Player& player, float dt, const Map& map, 
         }
 
         vel.y += grav * dt;
-        if (vel.y > 850.f) vel.y = 850.f; // Terminal velocity
+        if (vel.y > 850.f) vel.y = 850.f;
 
-        // Coyote jump handling
-        if ((player.getJumpBufferTimer() > 0.f || (player.isAutoJumpEnabled() && jumpPressed)) && player.getCoyoteTimer() > 0.f) {
-            vel.y = -player.getJumpStrength();
-            player.setCoyoteTimer(0.f);
-            player.setIsJumping(true);
-            player.setJumpBufferTimer(0.f);
+        if (!player.isExternalImpulseActive()) {
+            if ((player.getJumpBufferTimer() > 0.f || (player.isAutoJumpEnabled() && jumpPressed)) && player.getCoyoteTimer() > 0.f) {
+                vel.y = -player.getJumpStrength();
+                player.setCoyoteTimer(0.f);
+                player.setIsJumping(true);
+                player.setJumpBufferTimer(0.f);
+            } else if (player.getJumpBufferTimer() > 0.f && player.getHasAirJump()) {
+                vel.y = -player.getJumpStrength();
+                player.setHasAirJump(false);
+                player.setIsJumping(true);
+                player.setJumpBufferTimer(0.f);
+                player.getAnimator().play("Jump");
+                Engine::Audio::AudioManager::getInstance().playSound("assets/audio/jump.wav", 80.f);
+            }
         }
     }
 
@@ -576,7 +603,6 @@ void PlayerDashState::fixedUpdate(Player& player, float dt, const Map& map, cons
 void PlayerPounceState::enter(Player& player) {
     player.setIsDashing(true);
     player.setDashCooldownTimer(0.6f);
-    player.addRage(12.f); // Pounce action generates rage
 
     bool down = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S);
 
@@ -689,12 +715,73 @@ void PlayerMeleeAttackState::enter(Player& player) {
     mAttackTimer = 0.f;
     mHitboxActivated = false;
     mHitboxDeactivated = false;
+    mAttackBuffered = false;
     player.deactivateAttackHitbox();
     player.getAnimator().play("Attack", true);
 
+    if (player.getComboWindowTimer() <= 0.f) {
+        player.setComboStep(0);
+    }
+    mCurrentComboStep = player.getComboStep();
+
     sf::Vector2f vel = player.getVelocity();
-    vel.x = player.isFacingRight() ? 40.f : -40.f;
+    bool facingRight = player.isFacingRight();
+    float forwardPush = 0.f;
+
+    if (mCurrentComboStep == 0) {
+        forwardPush = facingRight ? 45.f : -45.f;
+        player.setComboStep(1);
+        player.setComboWindowTimer(0.70f);
+    } else if (mCurrentComboStep == 1) {
+        forwardPush = facingRight ? 75.f : -75.f;
+        player.setComboStep(2);
+        player.setComboWindowTimer(0.70f);
+    } else {
+        forwardPush = facingRight ? 140.f : -140.f;
+        player.setMeleeCooldownTimer(0.6f);
+        player.setComboStep(0);
+        player.setComboWindowTimer(0.f);
+        player.setHasAirJump(true);
+        player.setHasAirDash(true);
+        player.setDashCooldownTimer(0.f);
+    }
+
+    if (auto* objMgr = player.getObjectManager()) {
+        sf::Vector2f pCenter = player.getPosition() + sf::Vector2f(player.getBounds().size.x * 0.5f, player.getBounds().size.y * 0.5f);
+        float bestDist = 160.f;
+        bool foundTarget = false;
+
+        for (const auto& enemy : objMgr->getEnemies()) {
+            if (!enemy || enemy->isDead()) continue;
+            sf::Vector2f eCenter = enemy->getPosition() + enemy->getSize() * 0.5f;
+            float dx = eCenter.x - pCenter.x;
+            float dy = std::abs(eCenter.y - pCenter.y);
+
+            if (dy < 65.f) {
+                if (facingRight && dx > 0.f && dx <= bestDist) {
+                    foundTarget = true;
+                    bestDist = dx;
+                } else if (!facingRight && dx < 0.f && -dx <= bestDist) {
+                    foundTarget = true;
+                    bestDist = -dx;
+                }
+            }
+        }
+
+        if (foundTarget) {
+            float targetPush = (mCurrentComboStep == 2) ? 350.f : ((mCurrentComboStep == 1) ? 280.f : 240.f);
+            forwardPush = facingRight ? targetPush : -targetPush;
+        }
+    }
+
+    if (!player.getIsGrounded()) {
+        vel.y = 0.f;
+    }
+    vel.x = forwardPush;
     player.setVelocity(vel);
+    if (auto* rb = player.getRigidBody()) {
+        rb->setVelocity(vel);
+    }
     Engine::Audio::AudioManager::getInstance().playSound("assets/audio/player_slash.wav", 80.f);
 }
 //-------------------------------------------------------
@@ -710,7 +797,11 @@ void PlayerMeleeAttackState::exit(Player& player) {
 //------------[Handle Input - Process Attack Key Events]-------------------
 void PlayerMeleeAttackState::handleInput(Player& player, const sf::Event& event) {
     (void)player;
-    (void)event;
+    if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
+        if (keyPressed->code == sf::Keyboard::Key::J) {
+            mAttackBuffered = true;
+        }
+    }
 }
 //-------------------------------------------------------
 
@@ -729,25 +820,56 @@ void PlayerMeleeAttackState::fixedUpdate(Player& player, float dt, const Map& ma
             if (vel.x > 0.f) vel.x = 0.f;
         }
     } else {
-        vel.y += player.getGravity() * dt;
+        vel.y = 0.f;
+        if (vel.x > 0.f) {
+            vel.x -= 400.f * dt;
+            if (vel.x < 0.f) vel.x = 0.f;
+        } else if (vel.x < 0.f) {
+            vel.x += 400.f * dt;
+            if (vel.x > 0.f) vel.x = 0.f;
+        }
     }
     player.setVelocity(vel);
+    if (auto* rb = player.getRigidBody()) {
+        rb->setVelocity(vel);
+    }
     player.moveWithSweptCCD(vel * dt, physicsWorld, false);
 
     std::size_t frame = player.getAnimator().getCurrentFrame();
     if (frame >= 1 && frame < 3 && !mHitboxActivated) {
         mHitboxActivated = true;
         Combat::Hitbox slash;
-        slash.damage = 25.f;
-        slash.poiseDamage = 15.f;
-        slash.knockback = player.isFacingRight() ? sf::Vector2f(200.f, -80.f) : sf::Vector2f(-200.f, -80.f);
         slash.active = true;
 
-        if (player.isFacingRight()) {
-            slash.localBounds = Physics::AABB::fromPositionSize({20.f, -2.f}, {36.f, 38.f});
+        if (mCurrentComboStep == 0) {
+            slash.damage = 25.f;
+            slash.poiseDamage = 15.f;
+            slash.knockback = player.isFacingRight() ? sf::Vector2f(200.f, -80.f) : sf::Vector2f(-200.f, -80.f);
+            if (player.isFacingRight()) {
+                slash.localBounds = Physics::AABB::fromPositionSize({20.f, -2.f}, {36.f, 38.f});
+            } else {
+                slash.localBounds = Physics::AABB::fromPositionSize({-26.f, -2.f}, {36.f, 38.f});
+            }
+        } else if (mCurrentComboStep == 1) {
+            slash.damage = 30.f;
+            slash.poiseDamage = 20.f;
+            slash.knockback = player.isFacingRight() ? sf::Vector2f(260.f, -90.f) : sf::Vector2f(-260.f, -90.f);
+            if (player.isFacingRight()) {
+                slash.localBounds = Physics::AABB::fromPositionSize({20.f, -4.f}, {40.f, 40.f});
+            } else {
+                slash.localBounds = Physics::AABB::fromPositionSize({-30.f, -4.f}, {40.f, 40.f});
+            }
         } else {
-            slash.localBounds = Physics::AABB::fromPositionSize({-26.f, -2.f}, {36.f, 38.f});
+            slash.damage = 50.f;
+            slash.poiseDamage = 40.f;
+            slash.knockback = player.isFacingRight() ? sf::Vector2f(420.f, -140.f) : sf::Vector2f(-420.f, -140.f);
+            if (player.isFacingRight()) {
+                slash.localBounds = Physics::AABB::fromPositionSize({18.f, -6.f}, {48.f, 46.f});
+            } else {
+                slash.localBounds = Physics::AABB::fromPositionSize({-36.f, -6.f}, {48.f, 46.f});
+            }
         }
+
         player.setAttackHitbox(slash);
     } else if (frame >= 3 && !mHitboxDeactivated) {
         mHitboxDeactivated = true;
@@ -796,7 +918,16 @@ void PlayerMeleeAttackState::fixedUpdate(Player& player, float dt, const Map& ma
         }
     }
 
-    if (player.getAnimator().isFinished() || mAttackTimer >= 0.34f) {
+    if (mHitboxActivated && mAttackTimer >= 0.30f && player.canMeleeAttack() && player.getComboWindowTimer() > 0.f) {
+        bool attackPressed = mAttackBuffered || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::J);
+        if (attackPressed && player.consumeStamina(20.f)) {
+            mAttackBuffered = false;
+            player.changeState(PlayerStateType::MeleeAttack, true);
+            return;
+        }
+    }
+
+    if (player.getAnimator().isFinished() || mAttackTimer >= 0.38f) {
         if (player.getIsGrounded()) {
             player.changeState(PlayerStateType::Idle);
         } else {
@@ -818,8 +949,6 @@ void PlayerHeavyStrikeState::enter(Player& player) {
     mHitboxDeactivated = false;
     player.deactivateAttackHitbox();
     player.getAnimator().play("HeavyStrike", true);
-
-    player.addRage(15.f);
 
     sf::Vector2f vel = player.getVelocity();
     vel.x = player.isFacingRight() ? 220.f : -220.f;
@@ -1067,11 +1196,8 @@ void PlayerGunState::enter(Player& player) {
             rayBlocked = true;
         }
     }
-
-    player.setDebugRaycast(rayStart, rayEnd, rayBlocked);
-
     player.setFacingRight(aimDir.x >= 0.f);
-    player.consumeMana(18.f);
+    player.consumeMana(15.f);
 
     sf::Vector2f spawnPos = center + aimDir * 24.f;
     sf::Vector2f projVel = aimDir * 1150.f;
@@ -1212,5 +1338,98 @@ void PlayerParryState::fixedUpdate(Player& player, float dt, const Map& map, con
     }
 }
 //-------------------------------------------------------
+
+//=============================================================================
+// PlayerRoarState
+//=============================================================================
+
+//------------[Enter - Initialize Beast Roar Stagger AoE]-------------------
+void PlayerRoarState::enter(Player& player) {
+    mRoarTimer = 0.f;
+    mRoarTriggered = false;
+    player.consumeRage(25.f);
+    player.setSpellCooldownTimer(1.0f);
+    player.deactivateAttackHitbox();
+    player.getAnimator().play("HeavyStrike", true);
+
+    sf::Vector2f vel = player.getVelocity();
+    vel.x = 0.f;
+    player.setVelocity(vel);
+    if (auto* rb = player.getRigidBody()) {
+        rb->setVelocity(vel);
+    }
+
+    Engine::Audio::AudioManager::getInstance().playSound("assets/audio/beast_smash.wav", 100.f);
+}
+//-------------------------------------------------------
+
+//------------[Exit - Reset Roar State]-------------------
+void PlayerRoarState::exit(Player& player) {
+    (void)player;
+    mRoarTriggered = false;
+}
+//-------------------------------------------------------
+
+//------------[Handle Input - Process Roar Key Events]-------------------
+void PlayerRoarState::handleInput(Player& player, const sf::Event& event) {
+    (void)player;
+    (void)event;
+}
+//-------------------------------------------------------
+
+//------------[Fixed Update - Step Roar Duration, Poise Break Sweep & Shockwave]-------------------
+void PlayerRoarState::fixedUpdate(Player& player, float dt, const Map& map, const Physics::PhysicsWorld& physicsWorld) {
+    (void)map;
+    mRoarTimer += dt;
+
+    if (!mRoarTriggered && mRoarTimer >= 0.08f) {
+        mRoarTriggered = true;
+        sf::Vector2f pCenter = player.getPosition() + sf::Vector2f(player.getBounds().size.x * 0.5f, player.getBounds().size.y * 0.5f);
+        const float roarRadius = 240.f;
+
+        if (auto* ps = player.getParticleSystem()) {
+            ps->emitRoarShockwave(pCenter);
+        }
+
+        if (auto* objMgr = player.getObjectManager()) {
+            for (auto& enemy : objMgr->getEnemies()) {
+                if (!enemy || enemy->isDead()) continue;
+                sf::Vector2f eCenter = enemy->getPosition() + enemy->getSize() * 0.5f;
+                float dx = eCenter.x - pCenter.x;
+                float dy = eCenter.y - pCenter.y;
+                if ((dx * dx + dy * dy) <= roarRadius * roarRadius) {
+                    enemy->setStaggerDuration(3.5f);
+                    enemy->setStaggerTimer(0.f);
+                    enemy->resetPosture();
+                    enemy->changeState(EnemyStateType::Staggered);
+                    enemy->takeDamage(15.f, 100.f, {dx >= 0.f ? 220.f : -220.f, -100.f});
+                }
+            }
+        }
+
+        Engine::Audio::AudioManager::getInstance().playSound("assets/audio/posture_break.wav", 95.f);
+    }
+
+    sf::Vector2f vel = player.getVelocity();
+    if (player.getIsGrounded()) {
+        vel.x *= 0.85f;
+        player.setVelocity(vel);
+        player.moveWithSweptCCD(vel * dt, physicsWorld, true);
+    } else {
+        vel.y += player.getGravity() * dt;
+        player.setVelocity(vel);
+        player.moveWithSweptCCD(vel * dt, physicsWorld, false);
+    }
+
+    if (mRoarTimer >= 0.45f) {
+        if (player.getIsGrounded()) {
+            player.changeState(PlayerStateType::Idle);
+        } else {
+            player.changeState(PlayerStateType::Airborne);
+        }
+    }
+}
+//-------------------------------------------------------
+
 
 

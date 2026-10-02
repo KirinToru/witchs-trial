@@ -3,6 +3,7 @@
 #include <Game/States/EquipmentState.hpp>
 #include <Game/Game.hpp>
 #include <Engine/Audio/AudioManager.hpp>
+#include <Engine/Graphics/FontManager.hpp>
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -22,11 +23,7 @@ GameState::GameState(Game *game)
   mBackgroundTexture.setRepeated(true);
   mBackgroundSprite.setTexture(mBackgroundTexture);
 
-  if (mEndFont.openFromFile("assets/fonts/trebuc.ttf")) {
-    mEndFontLoaded = true;
-  } else if (mEndFont.openFromFile("C:/Windows/Fonts/arial.ttf")) {
-    mEndFontLoaded = true;
-  }
+  mEndFontLoaded = true;
 
   mPhysicsWorld.setGravity({0.f, 980.f});
 
@@ -60,6 +57,10 @@ void GameState::loadLevel(const std::string &filename) {
 
     for (const auto &pos : mMap.getEnemySpawns()) {
       mObjectManager.spawnInquisitor(pos);
+    }
+
+    for (const auto &pos : mMap.getPendulumTrapSpawns()) {
+      mObjectManager.spawnPendulumTrap(pos);
     }
 
     if (mMap.hasBossSpawn()) {
@@ -101,6 +102,7 @@ void GameState::handleInput(sf::Event &event) {
       mHUD.toggleInfo();
     }
     if (keyPress->code == sf::Keyboard::Key::F3) {
+      mHUD.toggleHitbox();
       mHUD.toggleDebugRaycast();
     }
     if (keyPress->code == sf::Keyboard::Key::I) {
@@ -150,8 +152,9 @@ void GameState::fixedUpdate(sf::Time dt) {
   mPhysicsWorld.update(dtSec);
   mPlayer.fixedUpdate(dtSec, mMap, mPhysicsWorld);
   mObjectManager.updateEnemies(dtSec, mPlayer, mPhysicsWorld);
-  mObjectManager.updateProjectiles(dtSec, mPhysicsWorld, &mParticleSystem);
+  mObjectManager.updateProjectiles(dtSec, mPhysicsWorld, &mParticleSystem, &mPlayer);
   mObjectManager.updateIceWalls(dtSec, &mParticleSystem);
+  mObjectManager.updatePendulumTraps(dtSec);
   resolveCombatCollisions();
   mObjectManager.cleanupDestroyed();
 
@@ -287,6 +290,7 @@ void GameState::resolveCombatCollisions() {
         sf::Vector2f hitPos = (playerPos + enemy->getPosition() + enemy->getSize() * 0.5f) * 0.5f;
         sf::Vector2f hitNormal = -mPlayer.getDashDirection();
         mParticleSystem.emitBloodSplatter(hitPos, hitNormal);
+        spawnDamagePopup(enemy->getPosition() + enemy->getSize() * 0.5f, 35.f, false);
         triggerHitStop(0.08f);
         triggerCameraShake(6.f, 0.25f);
         Engine::Audio::AudioManager::getInstance().playSound("assets/audio/enemy_hit.wav", 90.f);
@@ -307,6 +311,15 @@ void GameState::resolveCombatCollisions() {
         mPlayer.setHasAirJump(true);
         mPlayer.setHasAirDash(true);
         mPlayer.setDashCooldownTimer(0.f);
+        mPlayer.triggerExternalImpulse(0.4f);
+        if (mPlayer.getForm() == PlayerForm::Beast) {
+          mPlayer.addRage(15.f);
+        } else {
+          mPlayer.deductStamina(25.f);
+          if (mPlayer.getMana() >= 10.f) {
+            mPlayer.consumeMana(10.f);
+          }
+        }
         break;
       }
     }
@@ -325,9 +338,24 @@ void GameState::resolveCombatCollisions() {
       if (Combat::checkOverlap(playerHitbox, playerPos, enemy->getHurtbox(), enemy->getPosition())) {
         bool postureBroken = enemy->takeDamage(playerHitbox.damage, playerHitbox.poiseDamage, playerHitbox.knockback);
         mHitEnemiesThisSwing.push_back(enemy.get());
+        spawnDamagePopup(enemy->getPosition() + enemy->getSize() * 0.5f, playerHitbox.damage, (mPlayer.getComboStep() == 3 || mPlayer.getForm() == PlayerForm::Beast));
+
+        if (mPlayer.getForm() == PlayerForm::Beast) {
+          mPlayer.addRage(25.f);
+        }
 
         if (mPlayer.getStateType() == PlayerStateType::MeleeAttack) {
-          mPlayer.applyMeleeHitRecoil();
+          sf::Vector2f vel = mPlayer.getVelocity();
+          vel.x = 0.f;
+          mPlayer.setVelocity(vel);
+          if (auto* rb = mPlayer.getRigidBody()) {
+            rb->setVelocity(vel);
+          }
+          if (mPlayer.getMeleeCooldownTimer() > 0.f) {
+            mPlayer.setHasAirJump(true);
+            mPlayer.setHasAirDash(true);
+            mPlayer.setDashCooldownTimer(0.f);
+          }
         }
 
         sf::Vector2f hitNormal = {mPlayer.isFacingRight() ? 1.f : -1.f, -0.2f};
@@ -376,7 +404,6 @@ void GameState::resolveCombatCollisions() {
       }
     }
 
-    // Pogo-Magic Mechanic: Melee attack strikes Pogo Orb
     for (auto& proj : mObjectManager.getProjectiles()) {
       if (!proj || proj->isDead() || !proj->isPogoOrb() || proj->isPogoStruck()) continue;
       if (playerHitAABB.intersects(proj->getAABB())) {
@@ -396,28 +423,12 @@ void GameState::resolveCombatCollisions() {
         mPlayer.setHasAirJump(true);
         mPlayer.setHasAirDash(true);
         mPlayer.setDashCooldownTimer(0.f);
+        mPlayer.triggerExternalImpulse(0.4f);
 
         triggerHitStop(0.06f);
         triggerCameraShake(4.f, 0.2f);
         Engine::Audio::AudioManager::getInstance().playSound("assets/audio/pogo_hit.wav", 95.f);
         break;
-      }
-    }
-  }
-
-  // Pogo-Magic Hazard: If Player touches Pogo Orb without striking it
-  Physics::AABB playerBodyBox = mPlayer.getAABB();
-  for (auto& proj : mObjectManager.getProjectiles()) {
-    if (!proj || proj->isDead() || !proj->isPogoOrb() || proj->isPogoStruck()) continue;
-    if (playerHitbox.active && playerHitbox.getWorldAABB(playerPos).intersects(proj->getAABB())) {
-      continue;
-    }
-    if (playerBodyBox.intersects(proj->getAABB())) {
-      sf::Vector2f knockback{playerPos.x < proj->getPosition().x ? -160.f : 160.f, -280.f};
-      if (mPlayer.takeDamage(12.f, knockback)) {
-        mParticleSystem.emitBloodSplatter(playerPos + mPlayer.getBounds().size * 0.5f, {0.f, -1.f});
-        triggerHitStop(0.05f);
-        triggerCameraShake(3.f, 0.15f);
       }
     }
   }
@@ -435,6 +446,7 @@ void GameState::resolveCombatCollisions() {
         bool postureBroken = enemy->takeDamage(proj->getDamage(), proj->getPoiseDamage(), proj->getKnockback());
         sf::Vector2f hitNormal = {proj->getVelocity().x >= 0.f ? 1.f : -1.f, -0.2f};
         mParticleSystem.emitBloodSplatter(projPos, hitNormal);
+        spawnDamagePopup(enemy->getPosition() + enemy->getSize() * 0.5f, proj->getDamage(), proj->isPogoStruck());
         proj->destroy();
         hitTarget = true;
 
@@ -534,8 +546,15 @@ void GameState::resolveCombatCollisions() {
 
       if (Combat::checkOverlap(enemyHitbox, enemy->getPosition(), playerHurtbox, playerPos)) {
         if (mPlayer.isParrying()) {
-          enemy->takeDamage(25.f, 100.f, {mPlayer.isFacingRight() ? 260.f : -260.f, -120.f});
-          mParticleSystem.emitBloodSplatter(enemy->getPosition() + enemy->getSize() * 0.5f, {mPlayer.isFacingRight() ? 1.f : -1.f, -0.3f});
+          enemy->takeDamage(30.f, 100.f, {mPlayer.isFacingRight() ? 280.f : -280.f, -140.f});
+          enemy->setStaggerDuration(2.0f);
+          enemy->setStaggerTimer(0.f);
+          enemy->resetPosture();
+          enemy->changeState(EnemyStateType::Staggered);
+          mPlayer.addRage(40.f);
+          sf::Vector2f hitPos = (playerPos + enemy->getPosition() + enemy->getSize() * 0.5f) * 0.5f;
+          mParticleSystem.emitParrySparks(hitPos);
+          spawnDamagePopup(enemy->getPosition() + enemy->getSize() * 0.5f, 30.f, true);
           triggerHitStop(0.12f);
           triggerCameraShake(8.f, 0.3f);
           Engine::Audio::AudioManager::getInstance().playSound("assets/audio/posture_break.wav", 100.f);
@@ -550,6 +569,25 @@ void GameState::resolveCombatCollisions() {
             triggerCameraShake(5.f, 0.25f);
           }
         }
+      }
+    }
+  }
+
+  for (const auto& trap : mObjectManager.getPendulumTraps()) {
+    if (!trap) continue;
+    if (playerHurtbox.active && !playerHurtbox.invulnerable && mPlayer.getAABB().intersects(trap->getAABB())) {
+      sf::Vector2f bobVel = trap->getBobVelocity();
+      float speed = std::sqrt(bobVel.x * bobVel.x + bobVel.y * bobVel.y);
+      sf::Vector2f knockback = (speed > 20.f)
+          ? (bobVel / speed * 380.f + sf::Vector2f(0.f, -180.f))
+          : sf::Vector2f(mPlayer.isFacingRight() ? -340.f : 340.f, -280.f);
+
+      if (mPlayer.takeDamage(trap->getDamage(), knockback)) {
+        sf::Vector2f hitNormal = {knockback.x >= 0.f ? 1.f : -1.f, -0.3f};
+        mParticleSystem.emitBloodSplatter(trap->getBobPosition(), hitNormal);
+        triggerHitStop(0.08f);
+        triggerCameraShake(6.f, 0.25f);
+        Engine::Audio::AudioManager::getInstance().playSound("assets/audio/player_hurt.wav", 85.f);
       }
     }
   }
@@ -598,11 +636,18 @@ void GameState::update(sf::Time dt) {
 
   mParticleSystem.update(dtSec);
 
+  for (auto& popup : mDamagePopups) {
+    popup.timer -= dtSec;
+    popup.position.y -= 40.f * dtSec;
+  }
+  std::erase_if(mDamagePopups, [](const DamagePopup& p) { return p.timer <= 0.f; });
+
   sf::Vector2f vel = mPlayer.getVelocity();
   mHUD.setPlayerSpeed(std::abs(vel.x));
   mHUD.setEntityCount(static_cast<int>(mPhysicsWorld.getBodies().size() + mObjectManager.getEntityCount()));
   mHUD.setPlayerForm(mPlayer.getForm() == PlayerForm::Witch ? "Witch" : "Beast");
   mHUD.setPlayerState(mPlayer.getStateName());
+  mHUD.setComboStep(mPlayer.getComboStep());
   mHUD.setHealth(mPlayer.getHealth(), mPlayer.getMaxHealth());
   mHUD.setStamina(mPlayer.getStamina(), mPlayer.getMaxStamina());
   mHUD.setMana(mPlayer.getMana(), mPlayer.getMaxMana());
@@ -673,6 +718,7 @@ void GameState::render(sf::RenderWindow &window) {
   mMap.render(window, mPlayer.getPosition(), mHUD.isHitboxVisible());
   mObjectManager.render(window);
   mObjectManager.renderIceWalls(window, mHUD.isHitboxVisible());
+  mObjectManager.renderPendulumTraps(window, mHUD.isHitboxVisible());
   mObjectManager.renderEnemies(window, mHUD.isHitboxVisible());
   mObjectManager.renderProjectiles(window, mHUD.isHitboxVisible());
   mPlayer.render(window, mHUD.isHitboxVisible());
@@ -681,26 +727,94 @@ void GameState::render(sf::RenderWindow &window) {
     mPhysicsWorld.renderDebug(window);
   }
 
-  if (mHUD.isDebugRaycastVisible()) {
-    const auto& ray = mPlayer.getDebugRaycast();
-    if (ray.active && ray.timer > 0.f) {
-      float alphaRatio = std::clamp(ray.timer / ray.maxDuration, 0.f, 1.f);
-      std::uint8_t a = static_cast<std::uint8_t>(alphaRatio * 255.f);
-      sf::Color col = ray.hitObstacle ? sf::Color(255, 100, 80, a) : sf::Color(255, 240, 50, a);
-      sf::VertexArray line(sf::PrimitiveType::Lines, 2);
-      line[0] = sf::Vertex{ray.start, col};
-      line[1] = sf::Vertex{ray.end, col};
-      window.draw(line);
+  if (mHUD.isHitboxVisible()) {
+    sf::Vector2f playerPos = mPlayer.getPosition();
+    sf::FloatRect bounds = mPlayer.getBounds();
+    sf::Vector2f center = {playerPos.x + bounds.size.x * 0.5f, playerPos.y + bounds.size.y * 0.45f};
 
-      sf::CircleShape endMarker(4.f);
-      endMarker.setOrigin({4.f, 4.f});
-      endMarker.setPosition(ray.end);
-      endMarker.setFillColor(col);
-      window.draw(endMarker);
+    Enemy* targetEnemy = nullptr;
+    const float maxRadius = 550.f;
+    const float maxDistSq = maxRadius * maxRadius;
+
+    struct Candidate {
+      Enemy* enemy;
+      float distSq;
+      sf::Vector2f pos;
+    };
+    std::vector<Candidate> candidates;
+
+    for (const auto& enemy : mObjectManager.getEnemies()) {
+      if (!enemy || enemy->isDead()) continue;
+      sf::Vector2f ePos = enemy->getPosition() + enemy->getSize() * 0.5f;
+      float dx = ePos.x - center.x;
+      float dy = ePos.y - center.y;
+      float distSq = dx * dx + dy * dy;
+      if (distSq <= maxDistSq) {
+        candidates.push_back({enemy.get(), distSq, ePos});
+      }
     }
+
+    std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+      return a.distSq < b.distSq;
+    });
+
+    for (const auto& cand : candidates) {
+      Physics::SweptHit hit = mPhysicsWorld.raycast(center, cand.pos, mPlayer.getRigidBody(), false);
+      if (hit.hit && hit.body && hit.body->getType() == Physics::BodyType::Static &&
+          (hit.body->getTag() == Physics::ColliderTag::SolidWall || !hit.body->isOneWay()) &&
+          hit.toi < 0.99f) {
+        continue;
+      }
+      targetEnemy = cand.enemy;
+      break;
+    }
+
+    sf::Vector2f aimDir = {mPlayer.isFacingRight() ? 1.f : -1.f, 0.f};
+    sf::Vector2f laserEnd = center + aimDir * maxRadius;
+    bool locked = false;
+
+    if (targetEnemy) {
+      laserEnd = targetEnemy->getPosition() + targetEnemy->getSize() * 0.5f;
+      locked = true;
+    } else {
+      Physics::SweptHit hit = mPhysicsWorld.raycast(center, laserEnd, mPlayer.getRigidBody(), false);
+      if (hit.hit && hit.body && hit.body->getType() == Physics::BodyType::Static &&
+          (hit.body->getTag() == Physics::ColliderTag::SolidWall || !hit.body->isOneWay()) &&
+          hit.toi < 0.99f) {
+        laserEnd = center + (laserEnd - center) * hit.toi;
+      }
+    }
+
+    sf::Color laserColor = locked ? sf::Color(255, 40, 40, 220) : sf::Color(100, 200, 255, 140);
+    sf::VertexArray line(sf::PrimitiveType::Lines, 2);
+    line[0] = sf::Vertex{center, laserColor};
+    line[1] = sf::Vertex{laserEnd, laserColor};
+    window.draw(line);
+
+    sf::CircleShape endMarker(locked ? 5.f : 3.f);
+    endMarker.setOrigin({endMarker.getRadius(), endMarker.getRadius()});
+    endMarker.setPosition(laserEnd);
+    endMarker.setFillColor(laserColor);
+    window.draw(endMarker);
   }
 
   mParticleSystem.render(window);
+
+  const auto& pixelFont = Engine::Graphics::FontManager::getInstance().getFont(Engine::Graphics::FontType::Pixel);
+  for (const auto& popup : mDamagePopups) {
+    float alpha = std::clamp(popup.timer / popup.maxDuration, 0.f, 1.f);
+    std::uint8_t a = static_cast<std::uint8_t>(alpha * 255.f);
+    sf::Text text(pixelFont, popup.text, popup.isCrit ? 15 : 12);
+    sf::Color col = popup.color;
+    col.a = a;
+    text.setFillColor(col);
+    text.setOutlineColor(sf::Color(0, 0, 0, a));
+    text.setOutlineThickness(1.5f);
+    sf::FloatRect bounds = text.getLocalBounds();
+    text.setOrigin(Engine::Graphics::roundPosition({bounds.size.x * 0.5f, bounds.size.y * 0.5f}));
+    text.setPosition(Engine::Graphics::roundPosition(popup.position));
+    window.draw(text);
+  }
 
   mHUD.render(window);
   renderEndScreen(window);
@@ -746,6 +860,7 @@ void GameState::restartGame() {
   mHitStopTimer = 0.f;
   mShakeTimer = 0.f;
   mParticleSystem.clear();
+  mDamagePopups.clear();
   loadLevel("assets/maps/test.tmx");
   Engine::Audio::AudioManager::getInstance().stopAllSounds();
   Engine::Audio::AudioManager::getInstance().playBGM("assets/audio/bgm_exploration.ogg", true, 50.f);
@@ -777,61 +892,69 @@ void GameState::renderEndScreen(sf::RenderWindow &window) {
     botBar.setFillColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(alphaFactor * 255.f)));
     window.draw(botBar);
 
-    if (mEndFontLoaded) {
-      sf::Text shadowText(mEndFont, "YOU DIED", 76);
+    const auto& titleFont = Engine::Graphics::FontManager::getInstance().getFont(Engine::Graphics::FontType::Title);
+    const auto& pixelFont = Engine::Graphics::FontManager::getInstance().getFont(Engine::Graphics::FontType::Pixel);
+
+    if (mGameEndState == GameEndState::GameOver) {
+      sf::Text shadowText(titleFont, "YOU DIED", 76);
       shadowText.setFillColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(alphaFactor * 220.f)));
       sf::FloatRect sBounds = shadowText.getLocalBounds();
-      shadowText.setPosition({(viewSize.x - sBounds.size.x) * 0.5f + 3.f, viewSize.y * 0.5f - 62.f});
+      shadowText.setPosition(Engine::Graphics::roundPosition({(viewSize.x - sBounds.size.x) * 0.5f + 3.f, viewSize.y * 0.5f - 62.f}));
       window.draw(shadowText);
 
-      sf::Text titleText(mEndFont, "YOU DIED", 76);
+      sf::Text titleText(titleFont, "YOU DIED", 76);
       titleText.setFillColor(sf::Color(180, 20, 20, static_cast<std::uint8_t>(alphaFactor * 255.f)));
       titleText.setOutlineColor(sf::Color(40, 0, 0, static_cast<std::uint8_t>(alphaFactor * 255.f)));
       titleText.setOutlineThickness(3.f);
       sf::FloatRect bounds = titleText.getLocalBounds();
-      titleText.setPosition({(viewSize.x - bounds.size.x) * 0.5f, viewSize.y * 0.5f - 65.f});
+      titleText.setPosition(Engine::Graphics::roundPosition({(viewSize.x - bounds.size.x) * 0.5f, viewSize.y * 0.5f - 65.f}));
       window.draw(titleText);
-    }
-  } else if (mGameEndState == GameEndState::Victory) {
-    sf::RectangleShape overlay(viewSize);
-    overlay.setFillColor(sf::Color(10, 14, 25, static_cast<std::uint8_t>(alphaFactor * 195.f)));
-    window.draw(overlay);
-
-    sf::RectangleShape topBar({viewSize.x, 80.f});
-    topBar.setFillColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(alphaFactor * 255.f)));
-    window.draw(topBar);
-
-    sf::RectangleShape botBar({viewSize.x, 80.f});
-    botBar.setPosition({0.f, viewSize.y - 80.f});
-    botBar.setFillColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(alphaFactor * 255.f)));
-    window.draw(botBar);
-
-    if (mEndFontLoaded) {
-      sf::Text shadowText(mEndFont, "VICTORY ACHIEVED", 62);
+    } else if (mGameEndState == GameEndState::Victory) {
+      sf::Text shadowText(titleFont, "VICTORY ACHIEVED", 62);
       shadowText.setFillColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(alphaFactor * 220.f)));
       sf::FloatRect sBounds = shadowText.getLocalBounds();
-      shadowText.setPosition({(viewSize.x - sBounds.size.x) * 0.5f + 3.f, viewSize.y * 0.5f - 57.f});
+      shadowText.setPosition(Engine::Graphics::roundPosition({(viewSize.x - sBounds.size.x) * 0.5f + 3.f, viewSize.y * 0.5f - 57.f}));
       window.draw(shadowText);
 
-      sf::Text titleText(mEndFont, "VICTORY ACHIEVED", 62);
+      sf::Text titleText(titleFont, "VICTORY ACHIEVED", 62);
       titleText.setFillColor(sf::Color(240, 210, 85, static_cast<std::uint8_t>(alphaFactor * 255.f)));
       titleText.setOutlineColor(sf::Color(50, 40, 10, static_cast<std::uint8_t>(alphaFactor * 255.f)));
       titleText.setOutlineThickness(3.f);
       sf::FloatRect bounds = titleText.getLocalBounds();
-      titleText.setPosition({(viewSize.x - bounds.size.x) * 0.5f, viewSize.y * 0.5f - 60.f});
+      titleText.setPosition(Engine::Graphics::roundPosition({(viewSize.x - bounds.size.x) * 0.5f, viewSize.y * 0.5f - 60.f}));
       window.draw(titleText);
     }
-  }
 
-  if (mEndFontLoaded && mEndStateTimer > 0.8f) {
-    float promptAlpha = std::min(1.0f, (mEndStateTimer - 0.8f) / 0.6f);
-    sf::Text promptText(mEndFont, "PRESS [R] OR [ENTER] TO RESTART", 20);
-    promptText.setFillColor(sf::Color(220, 220, 220, static_cast<std::uint8_t>(promptAlpha * 240.f)));
-    promptText.setOutlineColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(promptAlpha * 240.f)));
-    promptText.setOutlineThickness(1.5f);
-    sf::FloatRect pBounds = promptText.getLocalBounds();
-    promptText.setPosition({(viewSize.x - pBounds.size.x) * 0.5f, viewSize.y * 0.5f + 70.f});
-    window.draw(promptText);
+    if (mEndStateTimer > 0.8f) {
+      float promptAlpha = std::min(1.0f, (mEndStateTimer - 0.8f) / 0.6f);
+      sf::Text promptText(pixelFont, "PRESS [R] OR [ENTER] TO RESTART", 18);
+      promptText.setFillColor(sf::Color(220, 220, 220, static_cast<std::uint8_t>(promptAlpha * 240.f)));
+      promptText.setOutlineColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(promptAlpha * 240.f)));
+      promptText.setOutlineThickness(1.5f);
+      sf::FloatRect pBounds = promptText.getLocalBounds();
+      promptText.setPosition(Engine::Graphics::roundPosition({(viewSize.x - pBounds.size.x) * 0.5f, viewSize.y * 0.5f + 70.f}));
+      window.draw(promptText);
+    }
   }
+}
+//-------------------------------------------------------
+
+//------------[Spawn Damage Popup - Spawn Floating Damage Text Indicator]-------------------
+void GameState::spawnDamagePopup(sf::Vector2f worldPos, float damage, bool isCrit) {
+  DamagePopup popup;
+  static float jitter = 0.f;
+  jitter = std::fmod(jitter + 14.f, 28.f) - 14.f;
+  popup.position = {worldPos.x + jitter, worldPos.y - 14.f};
+  popup.text = std::to_string(static_cast<int>(damage));
+  popup.timer = 0.5f;
+  popup.maxDuration = 0.5f;
+  popup.isCrit = isCrit;
+  if (isCrit) {
+    popup.text += "!";
+    popup.color = sf::Color(255, 120, 30);
+  } else {
+    popup.color = sf::Color(255, 235, 120);
+  }
+  mDamagePopups.push_back(popup);
 }
 //-------------------------------------------------------
