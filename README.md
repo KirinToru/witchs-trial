@@ -189,7 +189,7 @@ gh release create v0.2.0 --title "v0.2.0: Combat & Visual Polish" --generate-not
 
 ## Documentation & Roadmap
 
-- **[AI Changelog](docs/ai_changelog.md)** - Chronological log of architecture and mechanic additions
+- **[Changelog](docs/changelog.md)** - Chronological log of architecture and mechanic additions
 - **[Roadmap](docs/ROADMAP.md)** - Future milestones and planned features
 - **[Doxygen](docs/Doxyfile)** - Codebase documentation generator
 
