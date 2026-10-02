@@ -220,11 +220,56 @@ void ObjectManager::spawnProjectile(sf::Vector2f position, sf::Vector2f velocity
 }
 //-------------------------------------------------------
 
+//------------[Spawn Pogo Orb - Instantiate Large Strikeable Magic Orb]-------------------
+void ObjectManager::spawnPogoOrb(sf::Vector2f position, sf::Vector2f velocity, float damage) {
+  mProjectiles.push_back(std::make_unique<Projectile>(position, velocity, damage, 20.f, ProjectileType::PogoOrb));
+}
+//-------------------------------------------------------
+
+//------------[Spawn Gun Projectile - Instantiate Fast High-Velocity Gun Shot]-------------------
+void ObjectManager::spawnGunProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage, float poiseDamage) {
+  mProjectiles.push_back(std::make_unique<Projectile>(position, velocity, damage, poiseDamage, ProjectileType::Gun));
+}
+//-------------------------------------------------------
+
+//------------[Spawn Thunder Projectile - Instantiate Electric Shock Lightning Bolt]-------------------
+void ObjectManager::spawnThunderProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage, float poiseDamage) {
+  mProjectiles.push_back(std::make_unique<Projectile>(position, velocity, damage, poiseDamage, ProjectileType::Thunder));
+}
+//-------------------------------------------------------
+
+//------------[Spawn Ice Wall - Instantiate Static Solid Ice Pillar]-------------------
+void ObjectManager::spawnIceWall(sf::Vector2f position, Physics::PhysicsWorld& physicsWorld) {
+  mIceWalls.push_back(std::make_unique<IceWall>(physicsWorld, position));
+}
+//-------------------------------------------------------
+
+//------------[Update Ice Walls - Step Ice Wall Lifetimes]-------------------
+void ObjectManager::updateIceWalls(float dt, Engine::Graphics::ParticleSystem* particleSystem) {
+  (void)particleSystem;
+  for (auto& wall : mIceWalls) {
+    if (wall && !wall->isDead()) {
+      wall->update(dt);
+    }
+  }
+}
+//-------------------------------------------------------
+
+//------------[Render Ice Walls - Draw Crystalline Ice Pillars and Debug Hitboxes]-------------------
+void ObjectManager::renderIceWalls(sf::RenderWindow& window, bool showHitbox) {
+  for (auto& wall : mIceWalls) {
+    if (wall && !wall->isDead()) {
+      wall->render(window, showHitbox);
+    }
+  }
+}
+//-------------------------------------------------------
+
 //------------[Update Projectiles - Step Projectile CCD Physics and Lifetimes]-------------------
-void ObjectManager::updateProjectiles(float dt, const Physics::PhysicsWorld& physicsWorld) {
+void ObjectManager::updateProjectiles(float dt, const Physics::PhysicsWorld& physicsWorld, Engine::Graphics::ParticleSystem* particleSystem) {
   for (auto& proj : mProjectiles) {
     if (proj && !proj->isDead()) {
-      proj->update(dt, physicsWorld);
+      proj->update(dt, physicsWorld, particleSystem);
     }
   }
 }
@@ -262,6 +307,10 @@ void ObjectManager::cleanupDestroyed() {
   std::erase_if(mProjectiles, [](const std::unique_ptr<Projectile>& proj) {
     return !proj || proj->isDead();
   });
+
+  std::erase_if(mIceWalls, [](const std::unique_ptr<IceWall>& wall) {
+    return !wall || wall->isDead();
+  });
 }
 //-------------------------------------------------------
 
@@ -271,6 +320,7 @@ void ObjectManager::clear() {
   mSpawnedShapes.clear();
   mEnemies.clear();
   mProjectiles.clear();
+  mIceWalls.clear();
   mBoss = nullptr;
 }
 //-------------------------------------------------------

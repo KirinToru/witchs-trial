@@ -35,6 +35,7 @@ set(SOURCES
     "src/Game/States/MenuState.cpp"
     "src/Game/States/PauseState.cpp"
     "src/Game/States/GameState.cpp"
+    "src/Game/States/EquipmentState.cpp"
     "src/Engine/GUI/Button.cpp"
     "src/Game/UI/SpawnMenu.cpp"
     "src/Game/UI/HUD.cpp"
@@ -43,6 +44,7 @@ set(SOURCES
     "src/Game/Systems/ObjectManager.cpp"
     "src/Engine/Physics/PhysicsWorld.cpp"
     "src/Engine/Audio/AudioManager.cpp"
+    "src/Engine/Graphics/ParticleSystem.cpp"
 )
 add_executable(WitchsTrial ${SOURCES})
 

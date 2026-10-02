@@ -240,7 +240,8 @@ void EnemyStaggeredState::fixedUpdate(Enemy& enemy, float dt, const Player& play
     float t = enemy.getStaggerTimer() + dt;
     enemy.setStaggerTimer(t);
 
-    if (t >= enemy.getStaggerDuration()) {
+    float maxDuration = std::max(enemy.getStaggerDuration(), enemy.getElectrifiedTimer());
+    if (t >= maxDuration && !enemy.isElectrified()) {
         enemy.resetPosture();
         enemy.changeState(EnemyStateType::Chase);
     }

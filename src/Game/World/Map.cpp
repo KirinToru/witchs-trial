@@ -56,7 +56,7 @@ bool Map::loadFromFile(const std::string &filename, Physics::PhysicsWorld *physi
 }
 //-------------------------------------------------------
 
-// Helper function to extract attribute value from XML tag
+//------------[Extract Attribute - Extract Value from XML Tag String]-------------------
 std::string extractAttribute(const std::string &tag,
                              const std::string &attrName) {
   std::string search = attrName + "=\"";
@@ -69,14 +69,15 @@ std::string extractAttribute(const std::string &tag,
     return "";
   return tag.substr(start, end - start);
 }
+//-------------------------------------------------------
 
+//------------[Parse TMX - Parse Tiled Map XML Content and Populate Layers and Spawns]-------------------
 bool Map::parseTMX(const std::string &content, const std::string &basePath) {
   layers.clear();
   textObjects.clear();
   finishAreas.clear();
-  tilesets.clear(); // Clear previously loaded tilesets
+  tilesets.clear();
 
-  // Extract map dimensions
   size_t mapTagStart = content.find("<map ");
   size_t mapTagEnd = content.find(">", mapTagStart);
   std::string mapTag = content.substr(mapTagStart, mapTagEnd - mapTagStart);
@@ -232,8 +233,18 @@ bool Map::parseTMX(const std::string &content, const std::string &basePath) {
     pos = dataEnd + 7; // Move past </data>
   }
 
-  // Find spawn and finish in all layers
   int spawnCount = 0;
+  mEnemySpawns.clear();
+  mBossSpawnPos = {0.f, 0.f};
+  mHasBossSpawn = false;
+  mArenaTriggerPos = {0.f, 0.f};
+  mHasArenaTrigger = false;
+  mLevelTriggerPos = {0.f, 0.f};
+  mHasLevelTrigger = false;
+  mSavePoints.clear();
+  mLightMarkers.clear();
+  finishAreas.clear();
+
   for (const auto &layer : layers) {
     for (size_t y = 0; y < layer.grid.size(); ++y) {
       for (size_t x = 0; x < layer.grid[y].size(); ++x) {
@@ -247,64 +258,45 @@ bool Map::parseTMX(const std::string &content, const std::string &basePath) {
           continue;
 
         if (ts->name == "ts_main" || ts->name == "MainTileset") {
-          int type = (id - ts->firstgid) % ts->columns;
-          if (type == TileType::Start) {
+          int localId = id - ts->firstgid;
+          if (localId == TileType::PlayerSpawn) {
             if (spawnCount > 0) {
               std::cerr << "Warning: Multiple spawn points found!" << std::endl;
             }
             startPosition = {
                 static_cast<float>(x) * TILE_SIZE + TILE_SIZE / 2.f,
-                static_cast<float>(y) * TILE_SIZE + TILE_SIZE / 2.f};
+                static_cast<float>(y + 1) * TILE_SIZE - 24.f};
             spawnCount++;
-          } else if (type == TileType::Finish) {
-            bool flipH = (rawId & FLIP_H);
-            bool flipV = (rawId & FLIP_V);
-            bool flipD = (rawId & FLIP_D);
-
-            float rot = 0.f;
-            if (!flipD && !flipH && !flipV) {
-              rot = 0.f;
-            } else if (flipD && flipH && !flipV) {
-              rot = 90.f;
-            } else if (!flipD && flipH && flipV) {
-              rot = 180.f;
-            } else if (flipD && !flipH && flipV) {
-              rot = 270.f;
-            }
-            // Consider mirrored cases, but standard rotations are these 4.
-            else if (flipH) {
-              rot = 0.f;
-            } // H flip only
-            else if (flipV) {
-              rot = 180.f;
-            } // V flip only
-
-            sf::FloatRect trigger;
-            if (rot == 0.f) {
-              trigger = sf::FloatRect({static_cast<float>(x) * TILE_SIZE,
-                                       static_cast<float>(y) * TILE_SIZE},
-                                      {TILE_SIZE, 1.f});
-            } else if (rot == 90.f) {
-              trigger = sf::FloatRect(
-                  {static_cast<float>(x) * TILE_SIZE + TILE_SIZE - 1.f,
-                   static_cast<float>(y) * TILE_SIZE},
-                  {1.f, TILE_SIZE});
-            } else if (rot == 180.f) {
-              trigger = sf::FloatRect(
-                  {static_cast<float>(x) * TILE_SIZE,
-                   static_cast<float>(y) * TILE_SIZE + TILE_SIZE - 1.f},
-                  {TILE_SIZE, 1.f});
-            } else if (rot == 270.f) {
-              trigger = sf::FloatRect({static_cast<float>(x) * TILE_SIZE,
-                                       static_cast<float>(y) * TILE_SIZE},
-                                      {1.f, TILE_SIZE});
-            } else {
-              trigger = sf::FloatRect({static_cast<float>(x) * TILE_SIZE,
-                                       static_cast<float>(y) * TILE_SIZE},
-                                      {TILE_SIZE, 1.f});
-            }
-
-            finishAreas.push_back(trigger);
+          } else if (localId == TileType::EnemySpawn) {
+            mEnemySpawns.push_back({
+                static_cast<float>(x) * TILE_SIZE + 1.f,
+                static_cast<float>(y + 1) * TILE_SIZE - 52.f});
+          } else if (localId == TileType::BossSpawn) {
+            mBossSpawnPos = {
+                static_cast<float>(x) * TILE_SIZE - 16.f,
+                static_cast<float>(y + 1) * TILE_SIZE - 80.f};
+            mHasBossSpawn = true;
+          } else if (localId == TileType::SavePoint) {
+            mSavePoints.push_back({
+                static_cast<float>(x) * TILE_SIZE,
+                static_cast<float>(y) * TILE_SIZE});
+          } else if (localId == TileType::ArenaTrigger) {
+            mArenaTriggerPos = {
+                static_cast<float>(x) * TILE_SIZE,
+                static_cast<float>(y) * TILE_SIZE};
+            mHasArenaTrigger = true;
+          } else if (localId == TileType::LevelTrigger) {
+            mLevelTriggerPos = {
+                static_cast<float>(x) * TILE_SIZE,
+                static_cast<float>(y) * TILE_SIZE};
+            mHasLevelTrigger = true;
+            finishAreas.push_back(sf::FloatRect(
+                {static_cast<float>(x) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE},
+                {TILE_SIZE, TILE_SIZE}));
+          } else if (localId == TileType::LightMarker) {
+            mLightMarkers.push_back({
+                static_cast<float>(x) * TILE_SIZE,
+                static_cast<float>(y) * TILE_SIZE});
           }
         }
       }
@@ -471,6 +463,9 @@ void Map::render(sf::RenderWindow &window, sf::Vector2f playerPos,
     }
   }
 
+  mTopShadowBatch.setPrimitiveType(sf::PrimitiveType::Triangles);
+  mTopShadowBatch.clear();
+
   // Render all layers (back to front) with batched draw calls
   for (const auto &layer : layers) {
     const auto &grid = layer.grid;
@@ -503,12 +498,13 @@ void Map::render(sf::RenderWindow &window, sf::Vector2f playerPos,
           continue;
 
         const auto &ts = tilesets[tsIdx];
+        int localId = tileId - ts.firstgid;
         if (ts.name == "ts_main" || ts.name == "MainTileset") {
-          if (!showHitboxes)
+          if (!showHitboxes) {
             continue;
+          }
         }
 
-        int localId = tileId - ts.firstgid;
         int tileCol = localId % ts.columns;
         int tileRow = localId / ts.columns;
 
@@ -586,6 +582,74 @@ void Map::render(sf::RenderWindow &window, sf::Vector2f playerPos,
         window.draw(mTilesetBatches[i], &tilesets[i].texture);
       }
     }
+  }
+
+  mTopShadowBatch.clear();
+  for (int y = startY; y < endY; ++y) {
+    for (int x = startX; x < endX; ++x) {
+      if (isHazardTileAt(x, y) && !isSolidTileAt(x, y - 1) && !isHazardTileAt(x, y - 1)) {
+        float tileLeft = static_cast<float>(x) * TILE_SIZE;
+        float tileRight = tileLeft + TILE_SIZE;
+        float tileTop = static_cast<float>(y) * TILE_SIZE;
+        float shadowTop = tileTop - 14.f;
+        float shadowBottom = tileTop + 2.f;
+
+        sf::Color topTrans(25, 5, 20, 0);
+        sf::Color bottomDark(40, 5, 30, 220);
+
+        mTopShadowBatch.append(sf::Vertex{{tileLeft, shadowTop}, topTrans});
+        mTopShadowBatch.append(sf::Vertex{{tileRight, shadowTop}, topTrans});
+        mTopShadowBatch.append(sf::Vertex{{tileRight, shadowBottom}, bottomDark});
+
+        mTopShadowBatch.append(sf::Vertex{{tileLeft, shadowTop}, topTrans});
+        mTopShadowBatch.append(sf::Vertex{{tileRight, shadowBottom}, bottomDark});
+        mTopShadowBatch.append(sf::Vertex{{tileLeft, shadowBottom}, bottomDark});
+
+        static sf::Clock sMothClock;
+        float t = sMothClock.getElapsedTime().asSeconds();
+        float seed = static_cast<float>(x * 17 + y * 31);
+        float m1x = tileLeft + 8.f + std::sin(t * 3.f + seed) * 3.f;
+        float m1y = tileTop - 6.f + std::cos(t * 4.f + seed) * 2.f;
+        float wing1 = std::abs(std::sin(t * 18.f + seed)) * 3.f;
+
+        sf::Color mothColor(20, 5, 15, 230);
+        mTopShadowBatch.append(sf::Vertex{{m1x - wing1, m1y - 2.f}, mothColor});
+        mTopShadowBatch.append(sf::Vertex{{m1x, m1y}, mothColor});
+        mTopShadowBatch.append(sf::Vertex{{m1x - wing1, m1y + 1.f}, mothColor});
+
+        mTopShadowBatch.append(sf::Vertex{{m1x + wing1, m1y - 2.f}, mothColor});
+        mTopShadowBatch.append(sf::Vertex{{m1x, m1y}, mothColor});
+        mTopShadowBatch.append(sf::Vertex{{m1x + wing1, m1y + 1.f}, mothColor});
+
+        float m2x = tileLeft + 24.f + std::cos(t * 3.5f + seed * 1.3f) * 3.f;
+        float m2y = tileTop - 8.f + std::sin(t * 4.5f + seed * 1.3f) * 2.f;
+        float wing2 = std::abs(std::cos(t * 19.f + seed)) * 3.f;
+
+        mTopShadowBatch.append(sf::Vertex{{m2x - wing2, m2y - 2.f}, mothColor});
+        mTopShadowBatch.append(sf::Vertex{{m2x, m2y}, mothColor});
+        mTopShadowBatch.append(sf::Vertex{{m2x - wing2, m2y + 1.f}, mothColor});
+
+        mTopShadowBatch.append(sf::Vertex{{m2x + wing2, m2y - 2.f}, mothColor});
+        mTopShadowBatch.append(sf::Vertex{{m2x, m2y}, mothColor});
+        mTopShadowBatch.append(sf::Vertex{{m2x + wing2, m2y + 1.f}, mothColor});
+
+        float m3x = tileLeft + 16.f + std::sin(t * 4.2f + seed * 0.7f) * 3.f;
+        float m3y = tileTop - 11.f + std::cos(t * 3.8f + seed * 0.7f) * 2.5f;
+        float wing3 = std::abs(std::sin(t * 22.f + seed)) * 3.f;
+
+        mTopShadowBatch.append(sf::Vertex{{m3x - wing3, m3y - 2.f}, mothColor});
+        mTopShadowBatch.append(sf::Vertex{{m3x, m3y}, mothColor});
+        mTopShadowBatch.append(sf::Vertex{{m3x - wing3, m3y + 1.f}, mothColor});
+
+        mTopShadowBatch.append(sf::Vertex{{m3x + wing3, m3y - 2.f}, mothColor});
+        mTopShadowBatch.append(sf::Vertex{{m3x, m3y}, mothColor});
+        mTopShadowBatch.append(sf::Vertex{{m3x + wing3, m3y + 1.f}, mothColor});
+      }
+    }
+  }
+
+  if (mTopShadowBatch.getVertexCount() > 0) {
+    window.draw(mTopShadowBatch);
   }
 
   // Render cached text objects (no allocation in render loop)
@@ -775,9 +839,7 @@ Map::checkCollision(const sf::FloatRect &bounds) const {
             const TilesetInfo *ts = getTilesetForId(id);
             if (ts && (ts->name == "ts_main" || ts->name == "MainTileset")) {
               int localId = id - ts->firstgid;
-              int functionalId = localId % ts->columns;
-
-              if (functionalId == TileType::Wall) {
+              if (localId == TileType::SolidWall || localId == TileType::IceModifier || localId == TileType::TrampolineModifier) {
                 collisions.push_back(sf::FloatRect(
                     {x * TILE_SIZE, y * TILE_SIZE}, {TILE_SIZE, TILE_SIZE}));
               }
@@ -804,7 +866,6 @@ std::vector<sf::FloatRect>
 Map::checkPlatformCollision(const sf::FloatRect &bounds) const {
   std::vector<sf::FloatRect> platforms;
 
-  // Calculate tile range to check
   int left_tile = static_cast<int>(bounds.position.x / TILE_SIZE);
   int top_tile = static_cast<int>(bounds.position.y / TILE_SIZE);
   int right_tile =
@@ -812,7 +873,6 @@ Map::checkPlatformCollision(const sf::FloatRect &bounds) const {
   int bottom_tile =
       static_cast<int>((bounds.position.y + bounds.size.y) / TILE_SIZE);
 
-  // Clamp to map bounds
   if (left_tile < 0)
     left_tile = 0;
   if (top_tile < 0)
@@ -835,10 +895,7 @@ Map::checkPlatformCollision(const sf::FloatRect &bounds) const {
             const TilesetInfo *ts = getTilesetForId(id);
             if (ts && (ts->name == "ts_main" || ts->name == "MainTileset")) {
               int localId = id - ts->firstgid;
-              int functionalId = localId % ts->columns;
-
-              // Platform IDs
-              if (functionalId == TileType::Platform) {
+              if (localId == TileType::OneWayPlatform) {
                 platforms.push_back(sf::FloatRect(
                     {x * TILE_SIZE, y * TILE_SIZE}, {TILE_SIZE, TILE_SIZE}));
               }
@@ -882,18 +939,16 @@ bool Map::checkSpikeCollision(const sf::FloatRect &bounds) const {
             const TilesetInfo *ts = getTilesetForId(id);
             if (ts && (ts->name == "ts_main" || ts->name == "MainTileset")) {
               int localId = id - ts->firstgid;
-              int functionalId = localId % ts->columns;
-
-              if (functionalId == TileType::Spikes) {
-                sf::FloatRect spikeBounds({x * TILE_SIZE, y * TILE_SIZE},
-                                          {TILE_SIZE, TILE_SIZE});
-
-                spikeBounds.position.x += 4.f;
-                spikeBounds.size.x -= 8.f;
-                spikeBounds.position.y += 10.f;
-                spikeBounds.size.y -= 10.f;
-
+              if (localId == TileType::Spikes) {
+                sf::FloatRect spikeBounds({x * TILE_SIZE, y * TILE_SIZE + 16.f},
+                                          {TILE_SIZE, 16.f});
                 if (bounds.findIntersection(spikeBounds).has_value()) {
+                  return true;
+                }
+              } else if (localId == TileType::MothFloor) {
+                sf::FloatRect mothBounds({x * TILE_SIZE, y * TILE_SIZE},
+                                         {TILE_SIZE, TILE_SIZE});
+                if (bounds.findIntersection(mothBounds).has_value()) {
                   return true;
                 }
               }
@@ -942,6 +997,89 @@ const Map::TilesetInfo *Map::getTilesetForId(int globalId) const {
   }
   return bestMatch;
 }
+//-------------------------------------------------------
+
+//------------[Is Solid Tile At - Check If Specified Grid Cell Contains Solid Wall]-------------------
+bool Map::isSolidTileAt(int gridX, int gridY) const {
+  if (gridY < 0 || layers.empty())
+    return false;
+  for (const auto &l : layers) {
+    if (gridY < static_cast<int>(l.grid.size()) && gridX >= 0 &&
+        gridX < static_cast<int>(l.grid[gridY].size())) {
+      uint32_t rawId = l.grid[gridY][gridX];
+      if (rawId != 0) {
+        int id = static_cast<int>(rawId & TILE_MASK);
+        const TilesetInfo *ts = getTilesetForId(id);
+        if (ts) {
+          if (ts->name == "ts_main" || ts->name == "MainTileset") {
+            int localId = id - ts->firstgid;
+            if (localId == TileType::SolidWall || localId == TileType::IceModifier || localId == TileType::TrampolineModifier) {
+              return true;
+            }
+          } else {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+//-------------------------------------------------------
+
+//------------[Is Hazard Tile At - Check If Specified Grid Cell Contains Hazard Tile]-------------------
+bool Map::isHazardTileAt(int gridX, int gridY) const {
+  if (gridY < 0 || layers.empty())
+    return false;
+  for (const auto &l : layers) {
+    if (gridY < static_cast<int>(l.grid.size()) && gridX >= 0 &&
+        gridX < static_cast<int>(l.grid[gridY].size())) {
+      uint32_t rawId = l.grid[gridY][gridX];
+      if (rawId != 0) {
+        int id = static_cast<int>(rawId & TILE_MASK);
+        const TilesetInfo *ts = getTilesetForId(id);
+        if (ts) {
+          if (ts->name == "ts_main" || ts->name == "MainTileset") {
+            int localId = id - ts->firstgid;
+            if (localId == TileType::MothFloor || localId == TileType::Spikes) {
+              return true;
+            }
+          } else if (ts->name.find("hazard") != std::string::npos || ts->name.find("moth") != std::string::npos || ts->name.find("spike") != std::string::npos || ts->name.find("lava") != std::string::npos) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+//-------------------------------------------------------
+
+//------------[Is Special Modifier At - Check If Specified Grid Cell Contains Modifier]-------------------
+bool Map::isSpecialModifierAt(int gridX, int gridY) const {
+  if (gridY < 0 || layers.empty())
+    return false;
+  for (const auto &l : layers) {
+    if (gridY < static_cast<int>(l.grid.size()) && gridX >= 0 &&
+        gridX < static_cast<int>(l.grid[gridY].size())) {
+      uint32_t rawId = l.grid[gridY][gridX];
+      if (rawId != 0) {
+        int id = static_cast<int>(rawId & TILE_MASK);
+        const TilesetInfo *ts = getTilesetForId(id);
+        if (ts && (ts->name == "ts_main" || ts->name == "MainTileset")) {
+          int localId = id - ts->firstgid;
+          if (localId == TileType::IceModifier || localId == TileType::TrampolineModifier ||
+              localId == TileType::MothFloor || localId == TileType::Spikes ||
+              localId == TileType::PendulumTrap || localId == TileType::OneWayPlatform) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+//-------------------------------------------------------
 
 //------------[Generate Colliders - Populate PhysicsWorld with Static Map Geometry]-------------------
 void Map::generateColliders(Physics::PhysicsWorld &physicsWorld) const {
@@ -950,7 +1088,6 @@ void Map::generateColliders(Physics::PhysicsWorld &physicsWorld) const {
     if (h == 0) continue;
     int w = static_cast<int>(layer.grid[0].size());
 
-    // 1. Solid Walls - Merged Horizontally
     for (int y = 0; y < h; ++y) {
       int startX = -1;
       for (int x = 0; x < w; ++x) {
@@ -961,8 +1098,7 @@ void Map::generateColliders(Physics::PhysicsWorld &physicsWorld) const {
           const TilesetInfo *ts = getTilesetForId(id);
           if (ts && (ts->name == "ts_main" || ts->name == "MainTileset")) {
             int localId = id - ts->firstgid;
-            int functionalId = localId % ts->columns;
-            if (functionalId == TileType::Wall) {
+            if (localId == TileType::SolidWall) {
               isWall = true;
             }
           }
@@ -1000,7 +1136,6 @@ void Map::generateColliders(Physics::PhysicsWorld &physicsWorld) const {
       }
     }
 
-    // 2. One-Way Platforms - Merged Horizontally
     for (int y = 0; y < h; ++y) {
       int startX = -1;
       for (int x = 0; x < w; ++x) {
@@ -1011,8 +1146,7 @@ void Map::generateColliders(Physics::PhysicsWorld &physicsWorld) const {
           const TilesetInfo *ts = getTilesetForId(id);
           if (ts && (ts->name == "ts_main" || ts->name == "MainTileset")) {
             int localId = id - ts->firstgid;
-            int functionalId = localId % ts->columns;
-            if (functionalId == TileType::Platform) {
+            if (localId == TileType::OneWayPlatform) {
               isPlatform = true;
             }
           }
@@ -1044,6 +1178,198 @@ void Map::generateColliders(Physics::PhysicsWorld &physicsWorld) const {
         def.isOneWay = true;
         def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
         def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
+        def.friction = 0.5f;
+        def.restitution = 0.0f;
+        physicsWorld.createBody(def);
+      }
+    }
+
+    for (int y = 0; y < h; ++y) {
+      int startX = -1;
+      for (int x = 0; x < w; ++x) {
+        uint32_t rawId = layer.grid[y][x];
+        bool isIce = false;
+        if (rawId != 0) {
+          int id = static_cast<int>(rawId & TILE_MASK);
+          const TilesetInfo *ts = getTilesetForId(id);
+          if (ts && (ts->name == "ts_main" || ts->name == "MainTileset")) {
+            int localId = id - ts->firstgid;
+            if (localId == TileType::IceModifier) {
+              isIce = true;
+            }
+          }
+        }
+
+        if (isIce) {
+          if (startX == -1) startX = x;
+        } else {
+          if (startX != -1) {
+            float width = static_cast<float>(x - startX) * TILE_SIZE;
+            Physics::RigidBodyDef def;
+            def.type = Physics::BodyType::Static;
+            def.tag = Physics::ColliderTag::SolidWall;
+            def.isOneWay = false;
+            def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
+            def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
+            def.friction = 0.05f;
+            def.restitution = 0.0f;
+            physicsWorld.createBody(def);
+            startX = -1;
+          }
+        }
+      }
+      if (startX != -1) {
+        float width = static_cast<float>(w - startX) * TILE_SIZE;
+        Physics::RigidBodyDef def;
+        def.type = Physics::BodyType::Static;
+        def.tag = Physics::ColliderTag::SolidWall;
+        def.isOneWay = false;
+        def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
+        def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
+        def.friction = 0.05f;
+        def.restitution = 0.0f;
+        physicsWorld.createBody(def);
+      }
+    }
+
+    for (int y = 0; y < h; ++y) {
+      int startX = -1;
+      for (int x = 0; x < w; ++x) {
+        uint32_t rawId = layer.grid[y][x];
+        bool isTrampoline = false;
+        if (rawId != 0) {
+          int id = static_cast<int>(rawId & TILE_MASK);
+          const TilesetInfo *ts = getTilesetForId(id);
+          if (ts && (ts->name == "ts_main" || ts->name == "MainTileset")) {
+            int localId = id - ts->firstgid;
+            if (localId == TileType::TrampolineModifier) {
+              isTrampoline = true;
+            }
+          }
+        }
+
+        if (isTrampoline) {
+          if (startX == -1) startX = x;
+        } else {
+          if (startX != -1) {
+            float width = static_cast<float>(x - startX) * TILE_SIZE;
+            Physics::RigidBodyDef def;
+            def.type = Physics::BodyType::Static;
+            def.tag = Physics::ColliderTag::SolidWall;
+            def.isOneWay = false;
+            def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
+            def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
+            def.friction = 0.5f;
+            def.restitution = 1.0f;
+            physicsWorld.createBody(def);
+            startX = -1;
+          }
+        }
+      }
+      if (startX != -1) {
+        float width = static_cast<float>(w - startX) * TILE_SIZE;
+        Physics::RigidBodyDef def;
+        def.type = Physics::BodyType::Static;
+        def.tag = Physics::ColliderTag::SolidWall;
+        def.isOneWay = false;
+        def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
+        def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
+        def.friction = 0.5f;
+        def.restitution = 1.0f;
+        physicsWorld.createBody(def);
+      }
+    }
+
+    for (int y = 0; y < h; ++y) {
+      int startX = -1;
+      for (int x = 0; x < w; ++x) {
+        uint32_t rawId = layer.grid[y][x];
+        bool isMoth = false;
+        if (rawId != 0) {
+          int id = static_cast<int>(rawId & TILE_MASK);
+          const TilesetInfo *ts = getTilesetForId(id);
+          if (ts && (ts->name == "ts_main" || ts->name == "MainTileset")) {
+            int localId = id - ts->firstgid;
+            if (localId == TileType::MothFloor) {
+              isMoth = true;
+            }
+          }
+        }
+
+        if (isMoth) {
+          if (startX == -1) startX = x;
+        } else {
+          if (startX != -1) {
+            float width = static_cast<float>(x - startX) * TILE_SIZE;
+            Physics::RigidBodyDef def;
+            def.type = Physics::BodyType::Static;
+            def.tag = Physics::ColliderTag::Hazard;
+            def.isOneWay = false;
+            def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
+            def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
+            def.friction = 0.5f;
+            def.restitution = 0.0f;
+            physicsWorld.createBody(def);
+            startX = -1;
+          }
+        }
+      }
+      if (startX != -1) {
+        float width = static_cast<float>(w - startX) * TILE_SIZE;
+        Physics::RigidBodyDef def;
+        def.type = Physics::BodyType::Static;
+        def.tag = Physics::ColliderTag::Hazard;
+        def.isOneWay = false;
+        def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE};
+        def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, TILE_SIZE});
+        def.friction = 0.5f;
+        def.restitution = 0.0f;
+        physicsWorld.createBody(def);
+      }
+    }
+
+    for (int y = 0; y < h; ++y) {
+      int startX = -1;
+      for (int x = 0; x < w; ++x) {
+        uint32_t rawId = layer.grid[y][x];
+        bool isSpike = false;
+        if (rawId != 0) {
+          int id = static_cast<int>(rawId & TILE_MASK);
+          const TilesetInfo *ts = getTilesetForId(id);
+          if (ts && (ts->name == "ts_main" || ts->name == "MainTileset")) {
+            int localId = id - ts->firstgid;
+            if (localId == TileType::Spikes) {
+              isSpike = true;
+            }
+          }
+        }
+
+        if (isSpike) {
+          if (startX == -1) startX = x;
+        } else {
+          if (startX != -1) {
+            float width = static_cast<float>(x - startX) * TILE_SIZE;
+            Physics::RigidBodyDef def;
+            def.type = Physics::BodyType::Static;
+            def.tag = Physics::ColliderTag::Hazard;
+            def.isOneWay = false;
+            def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE + 16.f};
+            def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, 16.f});
+            def.friction = 0.5f;
+            def.restitution = 0.0f;
+            physicsWorld.createBody(def);
+            startX = -1;
+          }
+        }
+      }
+      if (startX != -1) {
+        float width = static_cast<float>(w - startX) * TILE_SIZE;
+        Physics::RigidBodyDef def;
+        def.type = Physics::BodyType::Static;
+        def.tag = Physics::ColliderTag::Hazard;
+        def.isOneWay = false;
+        def.position = {static_cast<float>(startX) * TILE_SIZE, static_cast<float>(y) * TILE_SIZE + 16.f};
+        def.localAABB = Physics::AABB::fromPositionSize({0.f, 0.f}, {width, 16.f});
         def.friction = 0.5f;
         def.restitution = 0.0f;
         physicsWorld.createBody(def);

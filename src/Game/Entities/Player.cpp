@@ -40,6 +40,8 @@ Player::Player()
     mMeleeAttackState = std::make_unique<PlayerMeleeAttackState>();
     mHeavyStrikeState = std::make_unique<PlayerHeavyStrikeState>();
     mCastSpellState = std::make_unique<PlayerCastSpellState>();
+    mGunState = std::make_unique<PlayerGunState>();
+    mParryState = std::make_unique<PlayerParryState>();
 
     // Set initial active state
     mCurrentState = mIdleState.get();
@@ -78,6 +80,7 @@ void Player::initPhysics(Physics::PhysicsWorld& physicsWorld) {
     def.restitution = 0.0f;
 
     mRigidBody = physicsWorld.createBody(def);
+    mPhysicsWorld = &physicsWorld;
 }
 //-------------------------------------------------------
 
@@ -122,8 +125,8 @@ void Player::fixedUpdate(float dt, const Map& map, const Physics::PhysicsWorld& 
         }
     }
 
-    // Buffer jump input
-    bool jumpPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space);
+    // Buffer jump input (W)
+    bool jumpPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::W);
     bool jumpJustPressed = jumpPressed && !wasJumpPressed;
     if (jumpJustPressed || (mAutoJumpEnabled && jumpPressed && isGrounded)) {
         jumpBufferTimer = jumpBufferTime;
@@ -143,15 +146,19 @@ void Player::fixedUpdate(float dt, const Map& map, const Physics::PhysicsWorld& 
         mCurrentState->fixedUpdate(*this, dt, map, physicsWorld);
     }
 
+    std::vector<Physics::RigidBody*> hazardOverlaps = physicsWorld.queryAABB(getAABB(), mRigidBody);
+    for (const auto* b : hazardOverlaps) {
+        if (b && (b->getTag() == Physics::ColliderTag::Hazard || b->getTag() == Physics::ColliderTag::MothFloor)) {
+            triggerHazardDeath();
+            break;
+        }
+    }
+
     // Combat resource updates
     if (mStaminaRegenDelayTimer > 0.f) {
         mStaminaRegenDelayTimer -= dt;
     } else if (mStamina < mMaxStamina) {
         mStamina = std::min(mMaxStamina, mStamina + mStaminaRegenRate * dt);
-    }
-
-    if (mForm == PlayerForm::Witch && mMana < mMaxMana) {
-        mMana = std::min(mMaxMana, mMana + 15.f * dt);
     }
 
     if (mRageDecayDelayTimer > 0.f) {
@@ -166,6 +173,21 @@ void Player::fixedUpdate(float dt, const Map& map, const Physics::PhysicsWorld& 
         if (mInvulnerableTimer <= 0.f) {
             mInvulnerableTimer = 0.f;
             mHurtbox.invulnerable = false;
+        }
+    }
+
+    if (mGunCooldownTimer > 0.f) {
+        mGunCooldownTimer = std::max(0.f, mGunCooldownTimer - dt);
+    }
+
+    if (mSpellCooldownTimer > 0.f) {
+        mSpellCooldownTimer = std::max(0.f, mSpellCooldownTimer - dt);
+    }
+
+    if (mDebugRaycast.timer > 0.f) {
+        mDebugRaycast.timer = std::max(0.f, mDebugRaycast.timer - dt);
+        if (mDebugRaycast.timer <= 0.f) {
+            mDebugRaycast.active = false;
         }
     }
 
@@ -228,9 +250,15 @@ void Player::reset(sf::Vector2f position) {
     isWallSliding = false;
     currentMaxSpeed = moveSpeed;
     mHealth = mMaxHealth;
+    mMana = mMaxMana;
+    mStamina = mMaxStamina;
     mInvulnerableTimer = 0.f;
     mHurtbox.invulnerable = false;
     mGroundSmashImpact = false;
+    mGunCooldownTimer = 0.f;
+    mSpellCooldownTimer = 0.f;
+    mDebugRaycast.active = false;
+    mDebugRaycast.timer = 0.f;
 
     if (mRigidBody) {
         mRigidBody->setPosition(shape.getPosition());
@@ -341,6 +369,12 @@ void Player::changeState(PlayerStateType newType) {
         case PlayerStateType::CastSpell:
             mCurrentState = mCastSpellState.get();
             break;
+        case PlayerStateType::Gun:
+            mCurrentState = mGunState.get();
+            break;
+        case PlayerStateType::Parry:
+            mCurrentState = mParryState.get();
+            break;
     }
 
     if (mCurrentState) {
@@ -352,6 +386,12 @@ void Player::changeState(PlayerStateType newType) {
 //------------[Get Current State - Query Active State Pointer]-------------------
 PlayerState* Player::getCurrentState() const {
     return mCurrentState;
+}
+//-------------------------------------------------------
+
+//------------[Get State Type - Query Active Player State Type]-------------------
+PlayerStateType Player::getStateType() const {
+    return mCurrentState ? mCurrentState->getType() : PlayerStateType::Idle;
 }
 //-------------------------------------------------------
 
@@ -653,6 +693,12 @@ void Player::setDashFreezeTimer(float t) {
 void Player::moveWithSweptCCD(sf::Vector2f displacement, const Physics::PhysicsWorld& physicsWorld, bool checkOneWay) {
     (void)checkOneWay;
 
+    if (isDead()) {
+        shape.move(displacement);
+        if (mRigidBody) mRigidBody->setPosition(shape.getPosition());
+        return;
+    }
+
     // 1. Horizontal swept collision
     if (displacement.x != 0.f) {
         sf::Vector2f dispX{displacement.x, 0.f};
@@ -660,6 +706,10 @@ void Player::moveWithSweptCCD(sf::Vector2f displacement, const Physics::PhysicsW
         Physics::SweptHit hitX = physicsWorld.sweepTest(boxX, dispX, mRigidBody, false);
 
         if (hitX.hit) {
+            if (hitX.body && (hitX.body->getTag() == Physics::ColliderTag::Hazard || hitX.body->getTag() == Physics::ColliderTag::MothFloor)) {
+                triggerHazardDeath();
+                return;
+            }
             float safeToi = std::max(0.0f, hitX.toi - 0.001f);
             shape.move({dispX.x * safeToi, 0.f});
             velocity.x = 0.f;
@@ -678,6 +728,10 @@ void Player::moveWithSweptCCD(sf::Vector2f displacement, const Physics::PhysicsW
         Physics::SweptHit hitY = physicsWorld.sweepTest(boxY, dispY, mRigidBody, false);
 
         if (hitY.hit) {
+            if (hitY.body && (hitY.body->getTag() == Physics::ColliderTag::Hazard || hitY.body->getTag() == Physics::ColliderTag::MothFloor)) {
+                triggerHazardDeath();
+                return;
+            }
             float safeToi = std::max(0.0f, hitY.toi - 0.001f);
             shape.move({0.f, dispY.y * safeToi});
 
@@ -694,7 +748,15 @@ void Player::moveWithSweptCCD(sf::Vector2f displacement, const Physics::PhysicsW
         }
     }
 
-    // 3. One-way platform landing check when descending
+    std::vector<Physics::RigidBody*> hazardOverlaps = physicsWorld.queryAABB(getAABB(), mRigidBody);
+    for (const auto* b : hazardOverlaps) {
+        if (b && (b->getTag() == Physics::ColliderTag::Hazard || b->getTag() == Physics::ColliderTag::MothFloor)) {
+            triggerHazardDeath();
+            return;
+        }
+    }
+
+    // 3. One-Way platform landing check when descending
     bool dropPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S) ||
                        sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down);
 
@@ -887,7 +949,20 @@ bool Player::takeDamage(float damage, sf::Vector2f knockback) {
     }
 
     mHealth = std::max(0.f, mHealth - damage);
-    velocity += knockback;
+
+    if (knockback.x != 0.f || knockback.y != 0.f) {
+        velocity = knockback;
+        if (mRigidBody) {
+            mRigidBody->setVelocity(velocity);
+        }
+        isGrounded = false;
+        isJumping = true;
+        changeState(PlayerStateType::Airborne);
+    }
+
+    hasAirJump = true;
+    hasAirDash = true;
+    dashCooldownTimer = 0.f;
 
     mInvulnerableTimer = 0.5f;
     mHurtbox.invulnerable = true;
@@ -905,6 +980,22 @@ void Player::heal(float amount) {
 //------------[Is Dead - Check If Player Health Depleted]-------------------
 bool Player::isDead() const {
     return mHealth <= 0.f;
+}
+//-------------------------------------------------------
+
+//------------[Trigger Hazard Death - Instant Lethal Damage on Hazard Contact]-------------------
+void Player::triggerHazardDeath() {
+    if (isDead()) return;
+    mHealth = 0.f;
+    velocity = {0.f, -520.f};
+    isGrounded = false;
+    isJumping = true;
+    mInvulnerableTimer = 0.f;
+    mHurtbox.invulnerable = false;
+    if (mRigidBody) {
+        mRigidBody->setVelocity(velocity);
+    }
+    Engine::Audio::AudioManager::getInstance().playSound("assets/audio/player_hurt.wav", 100.f);
 }
 //-------------------------------------------------------
 
@@ -1078,6 +1169,134 @@ ObjectManager* Player::getObjectManager() const {
 void Player::spawnProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage, float poiseDamage) {
     if (mObjectManager) {
         mObjectManager->spawnProjectile(position, velocity, damage, poiseDamage);
+    }
+}
+//-------------------------------------------------------
+
+//------------[Spawn Pogo Orb - Dispatch Pogo Orb Creation to Object Manager]-------------------
+void Player::spawnPogoOrb(sf::Vector2f position, sf::Vector2f velocity, float damage) {
+    if (mObjectManager) {
+        mObjectManager->spawnPogoOrb(position, velocity, damage);
+    }
+}
+//-------------------------------------------------------
+
+//------------[Spawn Gun Projectile - Dispatch Fast Gun Shot to Object Manager]-------------------
+void Player::spawnGunProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage, float poiseDamage) {
+    if (mObjectManager) {
+        mObjectManager->spawnGunProjectile(position, velocity, damage, poiseDamage);
+    }
+}
+//-------------------------------------------------------
+
+//------------[Spawn Thunder Projectile - Dispatch Fast Lightning Bolt to Object Manager]-------------------
+void Player::spawnThunderProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage, float poiseDamage) {
+    if (mObjectManager) {
+        mObjectManager->spawnThunderProjectile(position, velocity, damage, poiseDamage);
+    }
+}
+//-------------------------------------------------------
+
+//------------[Spawn Ice Wall - Dispatch Ice Wall Creation to Object Manager]-------------------
+void Player::spawnIceWall() {
+    if (mObjectManager && mPhysicsWorld) {
+        sf::Vector2f pPos = getPosition();
+        sf::FloatRect bounds = getBounds();
+        float spawnX = facingRight ? (pPos.x + bounds.size.x + 32.f) : (pPos.x - 32.f);
+        float spawnY = pPos.y + bounds.size.y * 0.45f;
+        mObjectManager->spawnIceWall({spawnX, spawnY}, *mPhysicsWorld);
+    }
+}
+//-------------------------------------------------------
+
+//------------[Cast Active Spell - Execute Currently Equipped L Magic Spell]-------------------
+void Player::castActiveSpell() {
+    if (mForm != PlayerForm::Witch || !canCastSpell()) return;
+
+    if (mActiveSpell == ActiveSpell::PogoOrb) {
+        if (!hasMana(25.f)) return;
+        consumeMana(25.f);
+        setSpellCooldownTimer(0.4f);
+        sf::Vector2f pPos = getPosition();
+        sf::FloatRect bounds = getBounds();
+        float spawnX = facingRight ? (pPos.x + bounds.size.x + 22.f) : (pPos.x - 22.f);
+        float spawnY = pPos.y + bounds.size.y * 0.45f;
+        spawnPogoOrb({spawnX, spawnY}, {facingRight ? 90.f : -90.f, 0.f});
+        Engine::Audio::AudioManager::getInstance().playSound("assets/audio/pogo_spawn.wav", 85.f);
+    } else if (mActiveSpell == ActiveSpell::IceWall) {
+        if (!hasMana(25.f)) return;
+        consumeMana(25.f);
+        setSpellCooldownTimer(0.5f);
+        spawnIceWall();
+        Engine::Audio::AudioManager::getInstance().playSound("assets/audio/ice_spawn.wav", 85.f);
+    } else if (mActiveSpell == ActiveSpell::Thunder) {
+        if (!hasMana(20.f)) return;
+        consumeMana(20.f);
+        setSpellCooldownTimer(0.4f);
+        sf::Vector2f pPos = getPosition();
+        sf::FloatRect bounds = getBounds();
+        float spawnX = facingRight ? (pPos.x + bounds.size.x + 24.f) : (pPos.x - 24.f);
+        float spawnY = pPos.y + bounds.size.y * 0.45f;
+        spawnThunderProjectile({spawnX, spawnY}, {facingRight ? 1300.f : -1300.f, 0.f}, 25.f, 50.f);
+        Engine::Audio::AudioManager::getInstance().playSound("assets/audio/thunder_cast.wav", 90.f);
+    }
+}
+//-------------------------------------------------------
+
+//------------[Is Parrying - Query Active Parry Counter Window]-------------------
+bool Player::isParrying() const {
+    return mIsParrying;
+}
+//-------------------------------------------------------
+
+//------------[Set Parrying - Update Active Parry Counter Flag]-------------------
+void Player::setParrying(bool parrying) {
+    mIsParrying = parrying;
+}
+//-------------------------------------------------------
+
+//------------[Spend Skill Point - Deduct One Upgrade Point]-------------------
+bool Player::spendSkillPoint() {
+    if (mSkillPoints > 0) {
+        --mSkillPoints;
+        return true;
+    }
+    return false;
+}
+//-------------------------------------------------------
+
+//------------[Upgrade Max Health - Increase Maximum Health and Current Health]-------------------
+void Player::upgradeMaxHealth(float amount) {
+    mMaxHealth += amount;
+    mHealth += amount;
+}
+//-------------------------------------------------------
+
+//------------[Upgrade Max Mana - Increase Maximum Mana and Current Mana]-------------------
+void Player::upgradeMaxMana(float amount) {
+    mMaxMana += amount;
+    mMana += amount;
+}
+//-------------------------------------------------------
+
+//------------[Upgrade Max Stamina - Increase Maximum Stamina and Current Stamina]-------------------
+void Player::upgradeMaxStamina(float amount) {
+    mMaxStamina += amount;
+    mStamina += amount;
+}
+//-------------------------------------------------------
+
+//------------[Apply Melee Hit Recoil - Apply Backward Repulsion on Successful Hit]-------------------
+void Player::applyMeleeHitRecoil() {
+    float recoilX = facingRight ? -180.f : 180.f;
+    sf::Vector2f vel = getVelocity();
+    vel.x = recoilX;
+    if (!isGrounded) {
+        vel.y = std::min(vel.y, -60.f);
+    }
+    setVelocity(vel);
+    if (mRigidBody) {
+        mRigidBody->setVelocity(vel);
     }
 }
 //-------------------------------------------------------

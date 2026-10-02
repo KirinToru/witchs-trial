@@ -79,6 +79,14 @@ SweptHit PhysicsWorld::sweepTest(const AABB& box, sf::Vector2f displacement, con
 }
 //-------------------------------------------------------
 
+//------------[Raycast - Cast Linear Ray Against Physics Bodies]-------------------
+SweptHit PhysicsWorld::raycast(sf::Vector2f start, sf::Vector2f end, const RigidBody* ignoreBody, bool checkOneWay) const {
+    sf::Vector2f disp = end - start;
+    AABB rayBox = AABB::fromPositionSize(start, {0.f, 0.f});
+    return sweepTest(rayBox, disp, ignoreBody, checkOneWay);
+}
+//-------------------------------------------------------
+
 //------------[Query AABB - Retrieve All Intersecting Bodies]-------------------
 std::vector<RigidBody*> PhysicsWorld::queryAABB(const AABB& aabb, const RigidBody* ignoreBody) const {
     std::vector<RigidBody*> result;

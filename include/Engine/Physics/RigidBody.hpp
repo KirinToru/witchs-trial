@@ -17,6 +17,7 @@ enum class ColliderTag : uint8_t {
     SolidWall,
     OneWayPlatform,
     Hazard,
+    MothFloor = Hazard,
     Generic
 };
 

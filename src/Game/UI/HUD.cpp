@@ -43,7 +43,8 @@ void HUD::render(sf::RenderWindow& window) {
        << "Entity Count: " << mEntityCount << "\n"
        << "Speed: " << (int)mPlayerSpeed << " px/s\n"
        << "Form: " << mPlayerForm << " (Q to toggle)\n"
-       << "State: " << mPlayerState;
+       << "State: " << mPlayerState << "\n"
+       << "Raycast [F3]: " << (mShowDebugRaycast ? "ON" : "OFF");
        
     sf::Text infoText(mFPSFont, ss.str(), 16);
     infoText.setFillColor(sf::Color::Yellow);
@@ -172,21 +173,41 @@ void HUD::render(sf::RenderWindow& window) {
 }
 //-------------------------------------------------------
 
+//------------[Toggle Hitbox - Flip Debug Hitbox Display State]-------------------
 void HUD::toggleHitbox() {
   mShowHitbox = !mShowHitbox;
 }
+//-------------------------------------------------------
 
+//------------[Toggle Info - Flip Telemetry Display State]-------------------
 void HUD::toggleInfo() {
   mShowFPS = !mShowFPS;
 }
+//-------------------------------------------------------
 
+//------------[Toggle Debug Raycast - Flip Gun Raycast Debug Line Display State]-------------------
+void HUD::toggleDebugRaycast() {
+  mShowDebugRaycast = !mShowDebugRaycast;
+}
+//-------------------------------------------------------
+
+//------------[Is Hitbox Visible - Query Debug Hitbox Display State]-------------------
 bool HUD::isHitboxVisible() const {
   return mShowHitbox;
 }
+//-------------------------------------------------------
 
+//------------[Is Info Visible - Query Telemetry Display State]-------------------
 bool HUD::isInfoVisible() const {
   return mShowFPS;
 }
+//-------------------------------------------------------
+
+//------------[Is Debug Raycast Visible - Query Gun Raycast Debug Line Display State]-------------------
+bool HUD::isDebugRaycastVisible() const {
+  return mShowDebugRaycast;
+}
+//-------------------------------------------------------
 
 void HUD::setPlayerSpeed(float speed) {
   mPlayerSpeed = speed;

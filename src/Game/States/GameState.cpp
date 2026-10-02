@@ -1,5 +1,6 @@
 #include <Game/States/GameState.hpp>
 #include <Game/States/PauseState.hpp>
+#include <Game/States/EquipmentState.hpp>
 #include <Game/Game.hpp>
 #include <Engine/Audio/AudioManager.hpp>
 #include <algorithm>
@@ -39,6 +40,7 @@ GameState::GameState(Game *game)
 void GameState::loadLevel(const std::string &filename) {
   mPhysicsWorld.clear();
   mObjectManager.clear();
+  mParticleSystem.clear();
   mHitEnemiesThisSwing.clear();
   mArenaLocked = false;
   mArenaLeftWall = nullptr;
@@ -49,39 +51,28 @@ void GameState::loadLevel(const std::string &filename) {
   if (mMap.loadFromFile(filename, &mPhysicsWorld)) {
     mPlayer.initPhysics(mPhysicsWorld);
     mPlayer.setObjectManager(&mObjectManager);
+    mPlayer.setParticleSystem(&mParticleSystem);
     mPlayer.reset(mMap.getStartPosition());
     sf::Vector2f playerPos = mPlayer.getPosition();
     sf::Vector2f viewSize = mCamera.getSize();
     float mapW = mMap.getWidth();
     float mapH = mMap.getHeight();
 
-    // 1. Bottom Floor - Enemies and props around start position (y ≈ 1540-1568)
-    mObjectManager.spawnInquisitor({450.f, 1540.f});
-    mObjectManager.spawnInquisitor({1150.f, 1540.f});
-    mObjectManager.spawnCrate({350.f, 1540.f});
-    mObjectManager.spawnBarrel({650.f, 1540.f});
-    mObjectManager.spawnBarrel({980.f, 1540.f});
-    mObjectManager.spawnCrate({1250.f, 1540.f});
+    for (const auto &pos : mMap.getEnemySpawns()) {
+      mObjectManager.spawnInquisitor(pos);
+    }
 
-    // 2. Middle Floor - Enemies and props on platforms (y ≈ 1030-1056)
-    mObjectManager.spawnInquisitor({200.f, 1030.f});
-    mObjectManager.spawnCrate({280.f, 1030.f});
-    mObjectManager.spawnInquisitor({800.f, 1030.f});
-    mObjectManager.spawnBarrel({730.f, 1030.f});
-    mObjectManager.spawnCrate({870.f, 1030.f});
-    mObjectManager.spawnInquisitor({1350.f, 1030.f});
-    mObjectManager.spawnCrate({1260.f, 1030.f});
+    if (mMap.hasBossSpawn()) {
+      mBoss = mObjectManager.spawnBoss(mMap.getBossSpawn());
+    }
 
-    // 3. Top Roof Arena - Grand Inquisitor Boss & Arena Trigger (y ≈ 600-640)
-    sf::Vector2f arenaCenter = {750.f, 440.f};
-    Physics::AABB triggerVolume = Physics::AABB::fromPositionSize({1260.f, 300.f}, {90.f, 350.f});
-    mArenaTrigger = ArenaTrigger(triggerVolume, arenaCenter, viewSize);
-    mBoss = mObjectManager.spawnBoss({750.f, 600.f});
-
-    mObjectManager.spawnBarrel({400.f, 610.f});
-    mObjectManager.spawnCrate({1100.f, 610.f});
-
-    mObjectManager.settleProps(mPhysicsWorld);
+    if (mMap.hasArenaTrigger()) {
+      sf::Vector2f triggerPos = mMap.getArenaTriggerPosition();
+      sf::Vector2f arenaCenter = {750.f, 440.f};
+      Physics::AABB triggerVolume = Physics::AABB::fromPositionSize(
+          {triggerPos.x - 16.f, triggerPos.y - 200.f}, {96.f, 300.f});
+      mArenaTrigger = ArenaTrigger(triggerVolume, arenaCenter, viewSize);
+    }
 
     float camX = (mapW < viewSize.x)
                      ? mapW / 2.f
@@ -109,8 +100,15 @@ void GameState::handleInput(sf::Event &event) {
     if (keyPress->code == sf::Keyboard::Key::F2) {
       mHUD.toggleInfo();
     }
+    if (keyPress->code == sf::Keyboard::Key::F3) {
+      mHUD.toggleDebugRaycast();
+    }
+    if (keyPress->code == sf::Keyboard::Key::I) {
+      mGame->pushState(std::make_unique<EquipmentState>(mGame, &mPlayer));
+      return;
+    }
     if (mGameEndState != GameEndState::None) {
-      if (keyPress->code == sf::Keyboard::Key::R || keyPress->code == sf::Keyboard::Key::Enter) {
+      if (keyPress->code == sf::Keyboard::Key::Enter) {
         restartGame();
         return;
       }
@@ -152,7 +150,8 @@ void GameState::fixedUpdate(sf::Time dt) {
   mPhysicsWorld.update(dtSec);
   mPlayer.fixedUpdate(dtSec, mMap, mPhysicsWorld);
   mObjectManager.updateEnemies(dtSec, mPlayer, mPhysicsWorld);
-  mObjectManager.updateProjectiles(dtSec, mPhysicsWorld);
+  mObjectManager.updateProjectiles(dtSec, mPhysicsWorld, &mParticleSystem);
+  mObjectManager.updateIceWalls(dtSec, &mParticleSystem);
   resolveCombatCollisions();
   mObjectManager.cleanupDestroyed();
 
@@ -166,15 +165,27 @@ void GameState::fixedUpdate(sf::Time dt) {
     for (auto& prop : mObjectManager.getProps()) {
       if (!prop || prop->isDestroyed() || !prop->isDestructible()) continue;
       if (smashAABB.intersects(prop->getAABB())) {
-        prop->takeDamage(200.f);
+        bool destroyed = prop->takeDamage(200.f);
+        if (destroyed) {
+          mParticleSystem.emitDebrisBurst(prop->getPosition() + prop->getSize() * 0.5f);
+        }
       }
     }
   }
 
-  // Check Boss Arena Lock Trigger
   if (!mArenaTrigger.isCompleted() && !mArenaLocked) {
     if (mArenaTrigger.check(mPlayer.getAABB())) {
       engageArenaLock();
+    }
+  }
+
+  for (const auto &sp : mMap.getSavePoints()) {
+    Physics::AABB spAABB = Physics::AABB::fromPositionSize(sp, {32.f, 32.f});
+    if (mPlayer.getAABB().intersects(spAABB)) {
+      if (mPlayer.getMana() < mPlayer.getMaxMana()) {
+        mPlayer.restoreMana(mPlayer.getMaxMana());
+        Engine::Audio::AudioManager::getInstance().playSound("assets/audio/save_point.wav", 80.f);
+      }
     }
   }
 
@@ -267,6 +278,40 @@ void GameState::resolveCombatCollisions() {
   sf::Vector2f playerPos = mPlayer.getPosition();
   auto& enemies = mObjectManager.getEnemies();
 
+  if (mPlayer.getIsDashing()) {
+    Physics::AABB playerBox = mPlayer.getAABB();
+    for (auto& enemy : enemies) {
+      if (!enemy || enemy->isDead()) continue;
+      if (enemy->getHurtbox().active && playerBox.intersects(enemy->getHurtbox().getWorldAABB(enemy->getPosition()))) {
+        bool broken = enemy->takeDamage(35.f, 25.f, mPlayer.getDashDirection() * 320.f);
+        sf::Vector2f hitPos = (playerPos + enemy->getPosition() + enemy->getSize() * 0.5f) * 0.5f;
+        sf::Vector2f hitNormal = -mPlayer.getDashDirection();
+        mParticleSystem.emitBloodSplatter(hitPos, hitNormal);
+        triggerHitStop(0.08f);
+        triggerCameraShake(6.f, 0.25f);
+        Engine::Audio::AudioManager::getInstance().playSound("assets/audio/enemy_hit.wav", 90.f);
+        if (broken) {
+          Engine::Audio::AudioManager::getInstance().playSound("assets/audio/posture_break.wav", 100.f);
+        }
+
+        sf::Vector2f dashDir = mPlayer.getDashDirection();
+        float bounceX = (dashDir.x >= 0.f) ? -380.f : 380.f;
+        float bounceY = -700.f;
+        sf::Vector2f bounceVel{bounceX, bounceY};
+        mPlayer.changeState(PlayerStateType::Airborne);
+        mPlayer.setIsDashing(false);
+        mPlayer.setVelocity(bounceVel);
+        if (auto* rb = mPlayer.getRigidBody()) {
+          rb->setVelocity(bounceVel);
+        }
+        mPlayer.setHasAirJump(true);
+        mPlayer.setHasAirDash(true);
+        mPlayer.setDashCooldownTimer(0.f);
+        break;
+      }
+    }
+  }
+
   if (!playerHitbox.active) {
     mHitEnemiesThisSwing.clear();
   } else {
@@ -280,6 +325,14 @@ void GameState::resolveCombatCollisions() {
       if (Combat::checkOverlap(playerHitbox, playerPos, enemy->getHurtbox(), enemy->getPosition())) {
         bool postureBroken = enemy->takeDamage(playerHitbox.damage, playerHitbox.poiseDamage, playerHitbox.knockback);
         mHitEnemiesThisSwing.push_back(enemy.get());
+
+        if (mPlayer.getStateType() == PlayerStateType::MeleeAttack) {
+          mPlayer.applyMeleeHitRecoil();
+        }
+
+        sf::Vector2f hitNormal = {mPlayer.isFacingRight() ? 1.f : -1.f, -0.2f};
+        sf::Vector2f hitPos = (playerPos + enemy->getPosition() + enemy->getSize() * 0.5f) * 0.5f;
+        mParticleSystem.emitBloodSplatter(hitPos, hitNormal);
 
         if (postureBroken) {
           triggerHitStop(0.10f);
@@ -304,12 +357,67 @@ void GameState::resolveCombatCollisions() {
         float dmg = (mPlayer.getForm() == PlayerForm::Beast) ? 120.f : 25.f;
         bool destroyed = prop->takeDamage(dmg);
         if (destroyed) {
+          mParticleSystem.emitDebrisBurst(prop->getPosition() + prop->getSize() * 0.5f);
           triggerHitStop(mPlayer.getForm() == PlayerForm::Beast ? 0.08f : 0.03f);
           triggerCameraShake(mPlayer.getForm() == PlayerForm::Beast ? 6.f : 2.f, 0.2f);
           Engine::Audio::AudioManager::getInstance().playSound("assets/audio/prop_destroy.wav", 80.f);
         } else {
           Engine::Audio::AudioManager::getInstance().playSound("assets/audio/prop_hit.wav", 60.f);
         }
+      }
+    }
+
+    for (auto& wall : mObjectManager.getIceWalls()) {
+      if (!wall || wall->isDead()) continue;
+      if (playerHitAABB.intersects(wall->getAABB())) {
+        wall->destroy();
+        mParticleSystem.emitDebrisBurst(wall->getPosition());
+        Engine::Audio::AudioManager::getInstance().playSound("assets/audio/ice_break.wav", 90.f);
+      }
+    }
+
+    // Pogo-Magic Mechanic: Melee attack strikes Pogo Orb
+    for (auto& proj : mObjectManager.getProjectiles()) {
+      if (!proj || proj->isDead() || !proj->isPogoOrb() || proj->isPogoStruck()) continue;
+      if (playerHitAABB.intersects(proj->getAABB())) {
+        float launchDir = mPlayer.isFacingRight() ? 920.f : -920.f;
+        proj->strikePogo(launchDir);
+        mParticleSystem.emitPogoBurst(proj->getPosition());
+
+        sf::Vector2f vel = mPlayer.getVelocity();
+        vel.y = -820.f;
+        mPlayer.setVelocity(vel);
+        mPlayer.setIsGrounded(false);
+        mPlayer.setIsJumping(true);
+        if (auto* rb = mPlayer.getRigidBody()) {
+          rb->setVelocity(vel);
+        }
+
+        mPlayer.setHasAirJump(true);
+        mPlayer.setHasAirDash(true);
+        mPlayer.setDashCooldownTimer(0.f);
+
+        triggerHitStop(0.06f);
+        triggerCameraShake(4.f, 0.2f);
+        Engine::Audio::AudioManager::getInstance().playSound("assets/audio/pogo_hit.wav", 95.f);
+        break;
+      }
+    }
+  }
+
+  // Pogo-Magic Hazard: If Player touches Pogo Orb without striking it
+  Physics::AABB playerBodyBox = mPlayer.getAABB();
+  for (auto& proj : mObjectManager.getProjectiles()) {
+    if (!proj || proj->isDead() || !proj->isPogoOrb() || proj->isPogoStruck()) continue;
+    if (playerHitbox.active && playerHitbox.getWorldAABB(playerPos).intersects(proj->getAABB())) {
+      continue;
+    }
+    if (playerBodyBox.intersects(proj->getAABB())) {
+      sf::Vector2f knockback{playerPos.x < proj->getPosition().x ? -160.f : 160.f, -280.f};
+      if (mPlayer.takeDamage(12.f, knockback)) {
+        mParticleSystem.emitBloodSplatter(playerPos + mPlayer.getBounds().size * 0.5f, {0.f, -1.f});
+        triggerHitStop(0.05f);
+        triggerCameraShake(3.f, 0.15f);
       }
     }
   }
@@ -325,8 +433,17 @@ void GameState::resolveCombatCollisions() {
       if (!enemy || enemy->isDead()) continue;
       if (Combat::checkOverlap(projHitbox, projPos, enemy->getHurtbox(), enemy->getPosition())) {
         bool postureBroken = enemy->takeDamage(proj->getDamage(), proj->getPoiseDamage(), proj->getKnockback());
+        sf::Vector2f hitNormal = {proj->getVelocity().x >= 0.f ? 1.f : -1.f, -0.2f};
+        mParticleSystem.emitBloodSplatter(projPos, hitNormal);
         proj->destroy();
         hitTarget = true;
+
+        if (proj->getType() == ProjectileType::Thunder) {
+          enemy->setElectrified(3.5f);
+          enemy->changeState(EnemyStateType::Staggered);
+          enemy->setStaggerTimer(0.f);
+          Engine::Audio::AudioManager::getInstance().playSound("assets/audio/thunder_hit.wav", 95.f);
+        }
 
         if (postureBroken) {
           triggerHitStop(0.10f);
@@ -343,12 +460,27 @@ void GameState::resolveCombatCollisions() {
 
     if (hitTarget) continue;
 
+    for (auto& wall : mObjectManager.getIceWalls()) {
+      if (!wall || wall->isDead()) continue;
+      if (proj->getAABB().intersects(wall->getAABB())) {
+        wall->destroy();
+        proj->destroy();
+        mParticleSystem.emitDebrisBurst(wall->getPosition());
+        Engine::Audio::AudioManager::getInstance().playSound("assets/audio/ice_break.wav", 90.f);
+        hitTarget = true;
+        break;
+      }
+    }
+
+    if (hitTarget) continue;
+
     for (auto& prop : mObjectManager.getProps()) {
       if (!prop || prop->isDestroyed() || !prop->isDestructible()) continue;
       if (proj->getAABB().intersects(prop->getAABB())) {
         bool destroyed = prop->takeDamage(proj->getDamage());
         proj->destroy();
         if (destroyed) {
+          mParticleSystem.emitDebrisBurst(prop->getPosition() + prop->getSize() * 0.5f);
           triggerHitStop(0.04f);
           triggerCameraShake(3.f, 0.15f);
           Engine::Audio::AudioManager::getInstance().playSound("assets/audio/prop_destroy.wav", 80.f);
@@ -358,16 +490,65 @@ void GameState::resolveCombatCollisions() {
     }
   }
 
+  Physics::AABB playerBodyAABB = mPlayer.getAABB();
+  for (auto& enemy : enemies) {
+    if (!enemy || enemy->isDead() || !enemy->isElectrified()) continue;
+    if (playerBodyAABB.intersects(enemy->getAABB())) {
+      enemy->setElectrified(0.f);
+      mPlayer.takeDamage(5.f, {0.f, 0.f});
+      sf::Vector2f shockVel{mPlayer.getVelocity().x, -850.f};
+      mPlayer.setVelocity(shockVel);
+      if (auto* rb = mPlayer.getRigidBody()) {
+        rb->setVelocity(shockVel);
+      }
+      mPlayer.setIsGrounded(false);
+      mPlayer.setIsJumping(true);
+      mPlayer.changeState(PlayerStateType::Airborne);
+      mPlayer.setHasAirJump(true);
+      mPlayer.setHasAirDash(true);
+      mPlayer.setDashCooldownTimer(0.f);
+
+      mParticleSystem.emitPogoBurst(playerPos + mPlayer.getBounds().size * 0.5f);
+      triggerHitStop(0.06f);
+      triggerCameraShake(6.f, 0.25f);
+      Engine::Audio::AudioManager::getInstance().playSound("assets/audio/shock_jump.wav", 95.f);
+      break;
+    }
+  }
+
   const auto& playerHurtbox = mPlayer.getHurtbox();
   for (auto& enemy : enemies) {
     if (!enemy || enemy->isDead()) continue;
 
     const auto& enemyHitbox = enemy->getAttackHitbox();
     if (enemyHitbox.active) {
+      Physics::AABB enemyHitAABB = enemyHitbox.getWorldAABB(enemy->getPosition());
+      for (auto& wall : mObjectManager.getIceWalls()) {
+        if (!wall || wall->isDead()) continue;
+        if (enemyHitAABB.intersects(wall->getAABB())) {
+          wall->destroy();
+          mParticleSystem.emitDebrisBurst(wall->getPosition());
+          Engine::Audio::AudioManager::getInstance().playSound("assets/audio/ice_break.wav", 90.f);
+        }
+      }
+
       if (Combat::checkOverlap(enemyHitbox, enemy->getPosition(), playerHurtbox, playerPos)) {
-        if (mPlayer.takeDamage(enemyHitbox.damage, enemyHitbox.knockback)) {
-          triggerHitStop(0.06f);
-          triggerCameraShake(4.f, 0.2f);
+        if (mPlayer.isParrying()) {
+          enemy->takeDamage(25.f, 100.f, {mPlayer.isFacingRight() ? 260.f : -260.f, -120.f});
+          mParticleSystem.emitBloodSplatter(enemy->getPosition() + enemy->getSize() * 0.5f, {mPlayer.isFacingRight() ? 1.f : -1.f, -0.3f});
+          triggerHitStop(0.12f);
+          triggerCameraShake(8.f, 0.3f);
+          Engine::Audio::AudioManager::getInstance().playSound("assets/audio/posture_break.wav", 100.f);
+        } else {
+          bool threatOnRight = enemy->getPosition().x >= playerPos.x;
+          mPlayer.setFacingRight(threatOnRight);
+          sf::Vector2f backwardKnockback = threatOnRight ? sf::Vector2f(-340.f, -440.f) : sf::Vector2f(340.f, -440.f);
+          if (mPlayer.takeDamage(enemyHitbox.damage, backwardKnockback)) {
+            sf::Vector2f hitNormal = {threatOnRight ? 1.f : -1.f, -0.3f};
+            mParticleSystem.emitBloodSplatter(playerPos + mPlayer.getBounds().size * 0.5f, hitNormal);
+            triggerHitStop(0.10f);
+            triggerCameraShake(5.f, 0.25f);
+          }
         }
       }
     }
@@ -395,6 +576,27 @@ void GameState::triggerCameraShake(float intensity, float durationSeconds) {
 //------------[Update - Step Camera Tracking & Telemetry]-------------------
 void GameState::update(sf::Time dt) {
   float dtSec = dt.asSeconds();
+
+  bool rHeld = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::R);
+  if (rHeld) {
+    mHoldRTimer += dtSec;
+    mResetFadeAlpha = std::min(255.f, mHoldRTimer * 255.f);
+    if (mResetFadeAlpha >= 255.f) {
+      mResetRepeatTimer += dtSec;
+      if (mResetRepeatTimer >= 0.25f || (mHoldRTimer - dtSec < 1.0f)) {
+        restartGame();
+        mResetRepeatTimer = 0.f;
+      }
+    }
+  } else {
+    mHoldRTimer = 0.f;
+    mResetRepeatTimer = 0.f;
+    if (mResetFadeAlpha > 0.f) {
+      mResetFadeAlpha = std::max(0.f, mResetFadeAlpha - dtSec * 500.f);
+    }
+  }
+
+  mParticleSystem.update(dtSec);
 
   sf::Vector2f vel = mPlayer.getVelocity();
   mHUD.setPlayerSpeed(std::abs(vel.x));
@@ -470,6 +672,7 @@ void GameState::render(sf::RenderWindow &window) {
   window.draw(mBackgroundSprite);
   mMap.render(window, mPlayer.getPosition(), mHUD.isHitboxVisible());
   mObjectManager.render(window);
+  mObjectManager.renderIceWalls(window, mHUD.isHitboxVisible());
   mObjectManager.renderEnemies(window, mHUD.isHitboxVisible());
   mObjectManager.renderProjectiles(window, mHUD.isHitboxVisible());
   mPlayer.render(window, mHUD.isHitboxVisible());
@@ -478,8 +681,37 @@ void GameState::render(sf::RenderWindow &window) {
     mPhysicsWorld.renderDebug(window);
   }
 
+  if (mHUD.isDebugRaycastVisible()) {
+    const auto& ray = mPlayer.getDebugRaycast();
+    if (ray.active && ray.timer > 0.f) {
+      float alphaRatio = std::clamp(ray.timer / ray.maxDuration, 0.f, 1.f);
+      std::uint8_t a = static_cast<std::uint8_t>(alphaRatio * 255.f);
+      sf::Color col = ray.hitObstacle ? sf::Color(255, 100, 80, a) : sf::Color(255, 240, 50, a);
+      sf::VertexArray line(sf::PrimitiveType::Lines, 2);
+      line[0] = sf::Vertex{ray.start, col};
+      line[1] = sf::Vertex{ray.end, col};
+      window.draw(line);
+
+      sf::CircleShape endMarker(4.f);
+      endMarker.setOrigin({4.f, 4.f});
+      endMarker.setPosition(ray.end);
+      endMarker.setFillColor(col);
+      window.draw(endMarker);
+    }
+  }
+
+  mParticleSystem.render(window);
+
   mHUD.render(window);
   renderEndScreen(window);
+
+  if (mResetFadeAlpha > 0.f) {
+    sf::View defaultView = window.getDefaultView();
+    window.setView(defaultView);
+    sf::RectangleShape fadeOverlay(defaultView.getSize());
+    fadeOverlay.setFillColor(sf::Color(0, 0, 0, static_cast<std::uint8_t>(std::clamp(mResetFadeAlpha, 0.f, 255.f))));
+    window.draw(fadeOverlay);
+  }
 }
 //-------------------------------------------------------
 
@@ -513,6 +745,7 @@ void GameState::restartGame() {
   mEndStateTimer = 0.f;
   mHitStopTimer = 0.f;
   mShakeTimer = 0.f;
+  mParticleSystem.clear();
   loadLevel("assets/maps/test.tmx");
   Engine::Audio::AudioManager::getInstance().stopAllSounds();
   Engine::Audio::AudioManager::getInstance().playBGM("assets/audio/bgm_exploration.ogg", true, 50.f);

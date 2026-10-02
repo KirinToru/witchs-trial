@@ -61,6 +61,8 @@ void Enemy::fixedUpdate(float dt, const Player& player, const Physics::PhysicsWo
         mAttackCooldownTimer = std::max(0.f, mAttackCooldownTimer - dt);
     }
 
+    updateElectrified(dt);
+
     // Passive Posture Recovery (Souls-like: recovers after delay if not staggered or dead)
     if (!isStaggered() && !isDead()) {
         if (mPostureRegenDelayTimer > 0.f) {
@@ -93,7 +95,10 @@ void Enemy::render(sf::RenderWindow& window, bool showHitbox) {
     } else if (isStaggered()) {
         // Staggered pose visual - vulnerability flashing
         renderShape.setFillColor(sf::Color(180, 110, 110));
-        renderShape.setOutlineColor(sf::Color(255, 60, 60));
+        renderShape.setOutlineColor(isElectrified() ? sf::Color(100, 240, 255) : sf::Color(255, 60, 60));
+        renderShape.setOutlineThickness(3.0f);
+    } else if (isElectrified()) {
+        renderShape.setOutlineColor(sf::Color(100, 240, 255));
         renderShape.setOutlineThickness(2.5f);
     } else if (getCurrentStateType() == EnemyStateType::TelegraphAttack) {
         // Souls-like glowing telegraph aura (Yellow/Orange warning)

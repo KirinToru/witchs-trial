@@ -9,19 +9,21 @@
     "fileStates": {
         "C:/Users/Kirin/source/repos/witchs-trial/assets/maps/test.tmx": {
             "scale": 0.5,
-            "selectedLayer": 1,
+            "selectedLayer": 2,
             "viewCenter": {
-                "x": 908,
-                "y": 834
+                "x": 839,
+                "y": 1062
             }
         },
         "C:/Users/Kirin/source/repos/witchs-trial/assets/tilesets/ts_bricks.tsx": {
             "scaleInDock": 1
         },
         "C:/Users/Kirin/source/repos/witchs-trial/assets/tilesets/ts_main.tsx": {
+            "dynamicWrapping": true,
             "scaleInDock": 1
         },
         "C:/Users/Kirin/source/repos/witchs-trial/assets/tilesets/ts_prototype.tsx": {
+            "dynamicWrapping": false,
             "scaleInDock": 1
         }
     },
@@ -35,5 +37,6 @@
     "project": "test.tiled-project",
     "recentFiles": [
         "C:/Users/Kirin/source/repos/witchs-trial/assets/maps/test.tmx"
-    ]
+    ],
+    "tileset.lastUsedFormat": "tsx"
 }

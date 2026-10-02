@@ -17,6 +17,16 @@ namespace Physics {
 class PhysicsWorld;
 }
 
+namespace Engine::Graphics {
+class ParticleSystem;
+}
+
+enum class ActiveSpell : uint8_t {
+    PogoOrb,
+    IceWall,
+    Thunder
+};
+
 class Player {
 public:
 //------------[Constructor - Initialize Player Components & State Machine]-------------------
@@ -83,6 +93,10 @@ public:
 
 //------------[Get Current State - Query Active State Pointer]-------------------
     PlayerState* getCurrentState() const;
+//-------------------------------------------------------
+
+//------------[Get State Type - Query Active Player State Type]-------------------
+    PlayerStateType getStateType() const;
 //-------------------------------------------------------
 
 //------------[Get State Name - Query Human-Readable Active State Name]-------------------
@@ -317,6 +331,10 @@ public:
     bool isDead() const;
 //-------------------------------------------------------
 
+//------------[Trigger Hazard Death - Instant Lethal Damage on Hazard Contact]-------------------
+    void triggerHazardDeath();
+//-------------------------------------------------------
+
 //------------[Get Stamina - Query Current Stamina]-------------------
     float getStamina() const;
 //-------------------------------------------------------
@@ -416,8 +434,131 @@ public:
     ObjectManager* getObjectManager() const;
 //-------------------------------------------------------
 
+//------------[Set Particle System - Assign Particle System For VFX Emitters]-------------------
+    void setParticleSystem(Engine::Graphics::ParticleSystem* ps) { mParticleSystem = ps; }
+//-------------------------------------------------------
+
+//------------[Get Particle System - Access Registered Particle System]-------------------
+    Engine::Graphics::ParticleSystem* getParticleSystem() const { return mParticleSystem; }
+//-------------------------------------------------------
+
+//------------[Set Physics World - Assign Physics Simulation World]-------------------
+    void setPhysicsWorld(Physics::PhysicsWorld* pw) { mPhysicsWorld = pw; }
+//-------------------------------------------------------
+
+//------------[Get Physics World - Access Registered Physics Simulation World]-------------------
+    Physics::PhysicsWorld* getPhysicsWorld() const { return mPhysicsWorld; }
+//-------------------------------------------------------
+
+//------------[Apply Melee Hit Recoil - Apply Backward Repulsion on Successful Hit]-------------------
+    void applyMeleeHitRecoil();
+//-------------------------------------------------------
+
 //------------[Spawn Projectile - Dispatch Projectile Creation to Object Manager]-------------------
     void spawnProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage = 30.f, float poiseDamage = 25.f);
+//-------------------------------------------------------
+
+//------------[Spawn Pogo Orb - Dispatch Pogo Orb Creation to Object Manager]-------------------
+    void spawnPogoOrb(sf::Vector2f position, sf::Vector2f velocity, float damage = 25.f);
+//-------------------------------------------------------
+
+//------------[Spawn Gun Projectile - Dispatch Fast Gun Shot to Object Manager]-------------------
+    void spawnGunProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage = 40.f, float poiseDamage = 30.f);
+//-------------------------------------------------------
+
+//------------[Spawn Thunder Projectile - Dispatch Fast Lightning Bolt to Object Manager]-------------------
+    void spawnThunderProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage = 25.f, float poiseDamage = 50.f);
+//-------------------------------------------------------
+
+//------------[Spawn Ice Wall - Dispatch Ice Wall Creation to Object Manager]-------------------
+    void spawnIceWall();
+//-------------------------------------------------------
+
+//------------[Cast Active Spell - Execute Currently Equipped L Magic Spell]-------------------
+    void castActiveSpell();
+//-------------------------------------------------------
+
+//------------[Get Active Spell - Query Currently Equipped L Spell]-------------------
+    ActiveSpell getActiveSpell() const { return mActiveSpell; }
+//-------------------------------------------------------
+
+//------------[Set Active Spell - Assign Equipped L Spell Slot]-------------------
+    void setActiveSpell(ActiveSpell spell) { mActiveSpell = spell; }
+//-------------------------------------------------------
+
+//------------[Get Spell Cooldown Timer - Query L Spell Cooldown]-------------------
+    float getSpellCooldownTimer() const { return mSpellCooldownTimer; }
+//-------------------------------------------------------
+
+//------------[Set Spell Cooldown Timer - Update L Spell Cooldown Value]-------------------
+    void setSpellCooldownTimer(float t) { mSpellCooldownTimer = t; }
+//-------------------------------------------------------
+
+//------------[Can Cast Spell - Check If Spell Cooldown Elapsed]-------------------
+    bool canCastSpell() const { return mSpellCooldownTimer <= 0.f; }
+//-------------------------------------------------------
+
+//------------[Is Parrying - Query Active Parry Counter Window]-------------------
+    bool isParrying() const;
+//-------------------------------------------------------
+
+//------------[Set Parrying - Update Active Parry Counter Flag]-------------------
+    void setParrying(bool parrying);
+//-------------------------------------------------------
+
+//------------[Get Skill Points - Query Unspent Upgrade Points]-------------------
+    int getSkillPoints() const { return mSkillPoints; }
+//-------------------------------------------------------
+
+//------------[Spend Skill Point - Deduct One Upgrade Point]-------------------
+    bool spendSkillPoint();
+//-------------------------------------------------------
+
+//------------[Upgrade Max Health - Increase Maximum Health and Current Health]-------------------
+    void upgradeMaxHealth(float amount);
+//-------------------------------------------------------
+
+//------------[Upgrade Max Mana - Increase Maximum Mana and Current Mana]-------------------
+    void upgradeMaxMana(float amount);
+//-------------------------------------------------------
+
+//------------[Upgrade Max Stamina - Increase Maximum Stamina and Current Stamina]-------------------
+    void upgradeMaxStamina(float amount);
+//-------------------------------------------------------
+
+    struct DebugRaycast {
+        sf::Vector2f start{0.f, 0.f};
+        sf::Vector2f end{0.f, 0.f};
+        float timer{0.f};
+        float maxDuration{0.6f};
+        bool hitObstacle{false};
+        bool active{false};
+    };
+
+//------------[Get Gun Cooldown Timer - Query Gun Shot Cooldown Timer]-------------------
+    float getGunCooldownTimer() const { return mGunCooldownTimer; }
+//-------------------------------------------------------
+
+//------------[Set Gun Cooldown Timer - Update Gun Shot Cooldown Timer]-------------------
+    void setGunCooldownTimer(float t) { mGunCooldownTimer = t; }
+//-------------------------------------------------------
+
+//------------[Can Fire Gun - Query If Gun Cooldown Has Elapsed]-------------------
+    bool canFireGun() const { return mGunCooldownTimer <= 0.f; }
+//-------------------------------------------------------
+
+//------------[Get Debug Raycast - Access Cached Auto-Aim Raycast]-------------------
+    const DebugRaycast& getDebugRaycast() const { return mDebugRaycast; }
+//-------------------------------------------------------
+
+//------------[Set Debug Raycast - Cache Gun Auto-Aim Line of Sight Query]-------------------
+    void setDebugRaycast(sf::Vector2f start, sf::Vector2f end, bool hitObstacle = false) {
+        mDebugRaycast.start = start;
+        mDebugRaycast.end = end;
+        mDebugRaycast.hitObstacle = hitObstacle;
+        mDebugRaycast.timer = mDebugRaycast.maxDuration;
+        mDebugRaycast.active = true;
+    }
 //-------------------------------------------------------
 
 private:
@@ -440,13 +581,19 @@ private:
     std::unique_ptr<PlayerMeleeAttackState> mMeleeAttackState;
     std::unique_ptr<PlayerHeavyStrikeState> mHeavyStrikeState;
     std::unique_ptr<PlayerCastSpellState> mCastSpellState;
+    std::unique_ptr<PlayerGunState> mGunState;
+    std::unique_ptr<PlayerParryState> mParryState;
     PlayerState* mCurrentState{nullptr};
     ObjectManager* mObjectManager{nullptr};
+    Engine::Graphics::ParticleSystem* mParticleSystem{nullptr};
+    Physics::PhysicsWorld* mPhysicsWorld{nullptr};
 
     // Combat Health & Resources
     float mHealth{100.f};
     float mMaxHealth{100.f};
     float mInvulnerableTimer{0.f};
+    bool mIsParrying{false};
+    int mSkillPoints{3};
 
     // Combat Resources (Witch: Stamina & Mana, Beast: Rage)
     float mStamina{100.f};
@@ -512,6 +659,10 @@ private:
     bool wasJumpPressed{false};
     bool wasTransformPressed{false};
     float mTransformCooldownTimer{0.f};
+    float mGunCooldownTimer{0.f};
+    float mSpellCooldownTimer{0.f};
+    ActiveSpell mActiveSpell{ActiveSpell::PogoOrb};
+    DebugRaycast mDebugRaycast;
     bool mAutoJumpEnabled{false};
     bool mGroundSmashImpact{false};
 };

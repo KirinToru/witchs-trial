@@ -13,9 +13,11 @@ public:
 
   void toggleHitbox();
   void toggleInfo();
+  void toggleDebugRaycast();
   
   bool isHitboxVisible() const;
   bool isInfoVisible() const;
+  bool isDebugRaycastVisible() const;
 
   void setPlayerSpeed(float speed);
   void setEntityCount(int count);
@@ -34,6 +36,7 @@ public:
 private:
   bool mShowHitbox;
   bool mShowFPS;
+  bool mShowDebugRaycast{true};
 
   sf::Font mFPSFont;
   bool mFPSFontLoaded;

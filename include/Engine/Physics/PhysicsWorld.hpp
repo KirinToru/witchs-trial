@@ -43,6 +43,9 @@ public:
     const std::vector<std::unique_ptr<RigidBody>>& getBodies() const;
 
     SweptHit sweepTest(const AABB& box, sf::Vector2f displacement, const RigidBody* ignoreBody = nullptr, bool checkOneWay = false) const;
+//------------[Raycast - Cast Linear Ray Against Physics Bodies]-------------------
+    SweptHit raycast(sf::Vector2f start, sf::Vector2f end, const RigidBody* ignoreBody = nullptr, bool checkOneWay = false) const;
+//-------------------------------------------------------
     std::vector<RigidBody*> queryAABB(const AABB& aabb, const RigidBody* ignoreBody = nullptr) const;
     bool checkOverlap(const AABB& aabb, const RigidBody* ignoreBody = nullptr) const;
 

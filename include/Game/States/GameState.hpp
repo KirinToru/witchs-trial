@@ -11,6 +11,7 @@
 #include <Game/Systems/ObjectManager.hpp>
 #include <Game/World/ArenaTrigger.hpp>
 #include <Game/Entities/GrandInquisitor.hpp>
+#include <Engine/Graphics/ParticleSystem.hpp>
 #include <vector>
 
 enum class GameEndState {
@@ -31,6 +32,12 @@ public:
 //------------[Get Physics World - Access Core Custom Physics Simulation]-------------------
   Physics::PhysicsWorld& getPhysicsWorld() {
     return mPhysicsWorld;
+  }
+//-------------------------------------------------------
+
+//------------[Get Particle System - Access Visual Particle Emitter System]-------------------
+  Engine::Graphics::ParticleSystem& getParticleSystem() {
+    return mParticleSystem;
   }
 //-------------------------------------------------------
 
@@ -90,6 +97,7 @@ private:
   sf::Sprite mBackgroundSprite;
 
   HUD mHUD;
+  Engine::Graphics::ParticleSystem mParticleSystem;
 
   ArenaTrigger mArenaTrigger;
   bool mArenaLocked{false};
@@ -101,4 +109,8 @@ private:
   float mEndStateTimer{0.f};
   sf::Font mEndFont;
   bool mEndFontLoaded{false};
+
+  float mHoldRTimer{0.f};
+  float mResetFadeAlpha{0.f};
+  float mResetRepeatTimer{0.f};
 };

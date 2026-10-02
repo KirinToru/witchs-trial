@@ -254,3 +254,80 @@ private:
     bool mProjectileSpawned{false};
 };
 
+class PlayerGunState : public PlayerState {
+public:
+//------------[Virtual Destructor - Gun State Cleanup]-------------------
+    ~PlayerGunState() override = default;
+//-------------------------------------------------------
+
+//------------[Enter - Initialize Witch Gun Shot & Auto-Aim Recoil]-------------------
+    void enter(Player& player) override;
+//-------------------------------------------------------
+
+//------------[Exit - Reset Gun State Properties]-------------------
+    void exit(Player& player) override;
+//-------------------------------------------------------
+
+//------------[Handle Input - Process Gun Key Events]-------------------
+    void handleInput(Player& player, const sf::Event& event) override;
+//-------------------------------------------------------
+
+//------------[Fixed Update - Step Gun Recovery & Aerial Momentum]-------------------
+    void fixedUpdate(Player& player, float dt, const Map& map, const Physics::PhysicsWorld& physicsWorld) override;
+//-------------------------------------------------------
+
+//------------[Get Name - Return Gun State Name]-------------------
+    std::string_view getName() const override { return "Gun"; }
+//-------------------------------------------------------
+
+//------------[Get Type - Return Gun State Type]-------------------
+    PlayerStateType getType() const override { return PlayerStateType::Gun; }
+//-------------------------------------------------------
+
+private:
+    float mGunTimer{0.f};
+    float mAirStaggerTimer{0.07f};
+    bool mRecoilApplied{false};
+    sf::Vector2f mRecoil{0.f, 0.f};
+};
+
+class PlayerParryState : public PlayerState {
+public:
+//------------[Virtual Destructor - Parry State Cleanup]-------------------
+    ~PlayerParryState() override = default;
+//-------------------------------------------------------
+
+//------------[Enter - Initialize Parry Stance & Counter Window]-------------------
+    void enter(Player& player) override;
+//-------------------------------------------------------
+
+//------------[Exit - Reset Parry Stance]-------------------
+    void exit(Player& player) override;
+//-------------------------------------------------------
+
+//------------[Handle Input - Process Parry Key Events]-------------------
+    void handleInput(Player& player, const sf::Event& event) override;
+//-------------------------------------------------------
+
+//------------[Fixed Update - Step Parry Duration & Friction]-------------------
+    void fixedUpdate(Player& player, float dt, const Map& map, const Physics::PhysicsWorld& physicsWorld) override;
+//-------------------------------------------------------
+
+//------------[Get Name - Return Parry State Name]-------------------
+    std::string_view getName() const override { return "Parry"; }
+//-------------------------------------------------------
+
+//------------[Get Type - Return Parry State Type]-------------------
+    PlayerStateType getType() const override { return PlayerStateType::Parry; }
+//-------------------------------------------------------
+
+//------------[Is Parry Window Active - Query Active Counter Stance Window]-------------------
+    bool isParryActive() const { return mParryTimer <= mParryWindow; }
+//-------------------------------------------------------
+
+private:
+    float mParryTimer{0.f};
+    float mParryWindow{0.25f};
+    float mTotalDuration{0.32f};
+};
+

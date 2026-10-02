@@ -130,6 +130,26 @@ public:
     bool isDead() const;
 //-------------------------------------------------------
 
+//------------[Is Electrified - Query If Enemy Is Shocked]-------------------
+    bool isElectrified() const { return mElectrifiedTimer > 0.f; }
+//-------------------------------------------------------
+
+//------------[Get Electrified Timer - Query Remaining Shock Duration]-------------------
+    float getElectrifiedTimer() const { return mElectrifiedTimer; }
+//-------------------------------------------------------
+
+//------------[Set Electrified - Update Shock Duration Timer]-------------------
+    void setElectrified(float t) { mElectrifiedTimer = t; }
+//-------------------------------------------------------
+
+//------------[Update Electrified - Count Down Shock Status Timer]-------------------
+    void updateElectrified(float dt) {
+        if (mElectrifiedTimer > 0.f) {
+            mElectrifiedTimer = std::max(0.f, mElectrifiedTimer - dt);
+        }
+    }
+//-------------------------------------------------------
+
 //------------[Get Hurtbox - Access Defensive Hurtbox Const]-------------------
     const Combat::Hurtbox& getHurtbox() const;
 //-------------------------------------------------------
@@ -249,6 +269,7 @@ protected:
     float mGravity{980.f};
     float mFriction{800.f};
     float mHitFlashTimer{0.f};
+    float mElectrifiedTimer{0.f};
 
     Combat::Hurtbox mHurtbox;
     Combat::Hitbox mAttackHitbox;

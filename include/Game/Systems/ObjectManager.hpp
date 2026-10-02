@@ -6,6 +6,7 @@
 #include <Game/Entities/InquisitorFootman.hpp>
 #include <Game/Entities/GrandInquisitor.hpp>
 #include <Game/Entities/Projectile.hpp>
+#include <Game/Entities/IceWall.hpp>
 #include <vector>
 #include <memory>
 
@@ -13,6 +14,10 @@ class Player;
 
 namespace Physics {
 class PhysicsWorld;
+}
+
+namespace Engine::Graphics {
+class ParticleSystem;
 }
 
 class ObjectManager {
@@ -73,8 +78,32 @@ public:
   void spawnProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage = 30.f, float poiseDamage = 25.f);
 //-------------------------------------------------------
 
+//------------[Spawn Pogo Orb - Instantiate Large Strikeable Magic Orb]-------------------
+  void spawnPogoOrb(sf::Vector2f position, sf::Vector2f velocity, float damage = 25.f);
+//-------------------------------------------------------
+
+//------------[Spawn Gun Projectile - Instantiate Fast High-Velocity Gun Shot]-------------------
+  void spawnGunProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage = 40.f, float poiseDamage = 30.f);
+//-------------------------------------------------------
+
+//------------[Spawn Thunder Projectile - Instantiate Electric Shock Lightning Bolt]-------------------
+  void spawnThunderProjectile(sf::Vector2f position, sf::Vector2f velocity, float damage = 25.f, float poiseDamage = 50.f);
+//-------------------------------------------------------
+
+//------------[Spawn Ice Wall - Instantiate Static Solid Ice Pillar]-------------------
+  void spawnIceWall(sf::Vector2f position, Physics::PhysicsWorld& physicsWorld);
+//-------------------------------------------------------
+
+//------------[Update Ice Walls - Step Ice Wall Lifetimes]-------------------
+  void updateIceWalls(float dt, Engine::Graphics::ParticleSystem* particleSystem = nullptr);
+//-------------------------------------------------------
+
+//------------[Render Ice Walls - Draw Crystalline Ice Pillars and Debug Hitboxes]-------------------
+  void renderIceWalls(sf::RenderWindow& window, bool showHitbox = false);
+//-------------------------------------------------------
+
 //------------[Update Projectiles - Step Projectile CCD Physics and Lifetimes]-------------------
-  void updateProjectiles(float dt, const Physics::PhysicsWorld& physicsWorld);
+  void updateProjectiles(float dt, const Physics::PhysicsWorld& physicsWorld, Engine::Graphics::ParticleSystem* particleSystem = nullptr);
 //-------------------------------------------------------
 
 //------------[Render Projectiles - Draw Magic Bolts and Debug Boxes]-------------------
@@ -91,6 +120,14 @@ public:
 
 //------------[Get Projectiles Mutable - Access Active Projectiles]-------------------
   std::vector<std::unique_ptr<Projectile>>& getProjectiles() { return mProjectiles; }
+//-------------------------------------------------------
+
+//------------[Get Ice Walls Const - Access Active Ice Walls Const]-------------------
+  const std::vector<std::unique_ptr<IceWall>>& getIceWalls() const { return mIceWalls; }
+//-------------------------------------------------------
+
+//------------[Get Ice Walls Mutable - Access Active Ice Walls]-------------------
+  std::vector<std::unique_ptr<IceWall>>& getIceWalls() { return mIceWalls; }
 //-------------------------------------------------------
 
 //------------[Cleanup Destroyed - Remove Destroyed Props and Dead Projectiles]-------------------
@@ -130,7 +167,7 @@ public:
 //-------------------------------------------------------
 
 //------------[Get Entity Count - Query Total Managed Entity Count]-------------------
-  size_t getEntityCount() const { return mSpawnedProps.size() + mEnemies.size() + mProjectiles.size(); }
+  size_t getEntityCount() const { return mSpawnedProps.size() + mEnemies.size() + mProjectiles.size() + mIceWalls.size(); }
 //-------------------------------------------------------
 
 private:
@@ -138,5 +175,6 @@ private:
   std::vector<std::unique_ptr<sf::Shape>> mSpawnedShapes;
   std::vector<std::unique_ptr<Enemy>> mEnemies;
   std::vector<std::unique_ptr<Projectile>> mProjectiles;
+  std::vector<std::unique_ptr<IceWall>> mIceWalls;
   GrandInquisitor* mBoss{nullptr};
 };
