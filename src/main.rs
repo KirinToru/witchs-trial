@@ -1,3 +1,16 @@
+//! # Witch's Trial Engine and API
+//!
+//! 2D precision platformer engine built with `wgpu` and `winit`.
+//!
+//! ## Subsystems
+//!
+//! - [`engine`]: 2D hardware renderer, input state bitmask, timers, textures, and debug fonts.
+//! - [`game`]: Orchestrator managing map state, player entity, camera tracking, and HUD.
+//! - [`player`]: Kinematic controller, FSM states, AABB/SAT collision resolution, and animation.
+//! - [`map`]: Tiled TMX XML parser, dynamic tilesets, UV coordinates, and merged colliders.
+//! - [`menu`]: Keyboard-driven UI screens, settings persistence, and pause overlay.
+//! - [`physics`]: Axis-Aligned Bounding Box (AABB) intersection and proximity detection.
+
 #![allow(
     clippy::too_many_arguments,
     clippy::collapsible_if,

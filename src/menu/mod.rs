@@ -1,3 +1,5 @@
+//! Keyboard-driven menu screens, configuration settings, and pause overlay.
+
 pub mod render;
 pub mod types;
 

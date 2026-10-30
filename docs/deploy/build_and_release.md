@@ -6,14 +6,17 @@
 - Rust toolchain: 1.85+ (stable channel).
 - Graphics: GPU supporting Vulkan 1.2+, DirectX 12, Metal, or OpenGL 3.3+.
 
-## Build Commands
+## Build and Run Commands
 
 ```bash
 # Debug build and test
 cargo test
 
-# Optimized release binary
+# Build optimized release binary
 cargo build --release
+
+# Run optimized release binary
+cargo run --release
 ```
 
 The resulting binary will be placed in `target/release/witchs-trial` (or `witchs-trial.exe` on Windows).

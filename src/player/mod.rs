@@ -1,3 +1,5 @@
+//! Player entity kinematics, state transitions, collision resolution, and animation.
+
 use crate::engine::{InputState, Key, Texture, WgpuRenderer};
 use crate::map::{InteractiveKind, InteractiveTile};
 use crate::physics::AABB;

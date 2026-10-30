@@ -1,3 +1,5 @@
+//! Gameplay coordinator managing map state, player entity, camera tracking, and HUD.
+
 use glam::Vec2;
 use crate::engine::{InputState, Key, Texture, WgpuRenderer};
 use crate::map::TmxMap;

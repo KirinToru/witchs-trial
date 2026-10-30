@@ -1,3 +1,5 @@
+//! Map parsing, dynamic tileset resolution, UV calculation, and merged collision generation.
+
 use glam::Vec2;
 use std::path::Path;
 use crate::engine::{Texture, WgpuRenderer};

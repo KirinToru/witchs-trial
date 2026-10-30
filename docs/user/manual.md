@@ -16,7 +16,7 @@ Navigate through precision platforming maps, avoid lethal void tiles and spikes,
 | [R] | Respawn at checkpoint |
 | [F3] | Toggle Debug Overlay and HUD |
 | [F4] | Toggle Fullscreen |
-| [Escape] | Return to Menu / Exit |
+| [Escape] | Pause / Return to Menu |
 
 ## Settings and Configuration
 

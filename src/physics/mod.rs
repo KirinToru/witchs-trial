@@ -1,3 +1,5 @@
+//! Physics bounding boxes (AABB) and geometric collision tests.
+
 use glam::Vec2;
 
 #[allow(clippy::upper_case_acronyms)]

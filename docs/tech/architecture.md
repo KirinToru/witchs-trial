@@ -1,41 +1,40 @@
-# Witch's Trial Technical Architecture
+# Witch's Trial Technical and API Documentation
 
-## Architecture Overview
+## Automated API Documentation
 
-The codebase is organized into modular Rust subsystems:
+Witch's Trial utilizes Rust's native automated documentation tool, `rustdoc` (the Rust ecosystem standard equivalent to Doxygen and Swagger/OpenAPI). All modules, structs, enums, functions, and internal methods are parsed directly from source code annotations and type signatures to ensure documentation is always in sync with implementation.
 
-- `src/main.rs`: Application entry point, window management, event loop via winit, and fixed timestep orchestration.
-- `src/game.rs`: Gameplay coordinator managing the active map, player entity, camera tracking, and debug HUD overlay.
-- `src/engine/`: Core engine primitives:
-  - `renderer.rs`: Hardware-accelerated 2D quad/sprite batching on wgpu.
-  - `input.rs`: Keyboard and mouse input state tracking.
-  - `time.rs`: TimeAccumulator for fixed-timestep physics updates and sub-frame alpha interpolation.
-  - `texture.rs`: GPU texture management and bind groups.
-  - `debug_font.rs`: Minimal embedded 8x8 ASCII glyph font renderer.
-- `src/physics/`:
-  - `mod.rs`: Axis-Aligned Bounding Box (AABB) intersection and proximity detection.
-  - `tests/`: Isolated unit tests for bounding box collisions.
-- `src/player/`:
-  - `mod.rs`: Player struct, state updates, collision resolution, and respawn logic.
-  - `state.rs`: PlayerState finite state machine enum.
-  - `kinematics.rs`: Kinematic calculations and numerical helpers.
-  - `render.rs`: Player sprite rendering, direction flips, and visual state tints.
-  - `tests/`: Dedicated unit test files for player kinematics, wall slides, dashes, and bhop physics.
-- `src/map/`:
-  - `mod.rs`: Tiled TMX XML parser, orientation flag decoders, and collider extraction.
-  - `tests/`: Isolated tests for rotation decoders, layer data parsing, and spike hitboxes.
-- `src/menu/`:
-  - `mod.rs`: MenuSystem navigation, map selection, and settings management.
-  - `types.rs`: Settings enums, configuration data structures, and file persistence.
-  - `render.rs`: Menu UI drawing logic for main, settings, map selection, and completion screens.
-  - `tests/`: Isolated tests for menu flows and setting cycling.
+### Generating Interactive HTML Documentation
 
-## Physics and Kinematics
+To build and open the interactive documentation website in your default web browser, run:
 
-The game runs a fixed physics loop with sub-frame interpolation:
-- Horizontal ground acceleration, friction, and air drag.
-- Jump buffering and coyote time for responsive jumping.
-- Dynamic wall slide and directional wall jumps.
-- Dash impulse with impact freeze and cooldown timer.
-- Bunny hop momentum chaining with optional auto-bhop support.
-- Immediate fatal collision on hazard and void modifier contact.
+```bash
+cargo doc --document-private-items --no-deps --open
+```
+
+The generated documentation is located at `target/doc/witchs_trial/index.html` and provides:
+- Live client-side full-text search across all symbols, methods, and constants.
+- Module hierarchy navigation (`engine`, `game`, `map`, `menu`, `physics`, `player`).
+- Type signatures, trait implementations, visibility levels, and default values.
+- Direct links to the underlying source code for every item.
+
+## Architecture and Core Principles
+
+The engine is built around deterministic simulation, data locality, and modular decoupling:
+
+### 1. Deterministic Simulation Loop
+- Fixed-timestep physics update running at configurable frequencies (30 Hz to 300 Hz).
+- `TimeAccumulator` decouples physics ticks from variable monitor refresh rates.
+- Sub-frame alpha interpolation eliminates visual stutter during frame rendering.
+
+### 2. Kinematics and Continuous Collision Detection
+- Swept Axis-Aligned Bounding Box (AABB) collision prevents tunneling at high velocities.
+- Horizontal tile collider merging prevents ghost-vertex edge snagging.
+- Forgiving platformer mechanics: Coyote time (120ms), jump buffering (160ms), and wall slides.
+- Dedicated hurtbox sizing decoupled from collision geometry.
+
+### 3. Rendering Architecture
+- Low-overhead batch renderer built directly on `wgpu`.
+- Dynamic backend selection supporting Vulkan, DirectX 12, Metal, and OpenGL.
+- Texture atlas mapping with nearest-neighbor point sampling for retro pixel aesthetics.
+- Camera transformations applied in screen space to prevent GPU uniform buffer race conditions.
