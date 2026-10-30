@@ -1,0 +1,8 @@
+mod test_window_mode_cycling;
+mod test_fps_lock_cycling;
+mod test_timestep_mode_cycling;
+mod test_menu_map_select_flow;
+mod test_visible_settings_hierarchy;
+mod test_platform_backend_filtering;
+mod test_settings_arrow_key_adjust;
+mod test_pause_menu_flow;

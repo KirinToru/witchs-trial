@@ -1,0 +1,15 @@
+[package]
+name = "witchs-trial"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+winit = "0.30.13"
+wgpu = "30.0.1"
+pollster = "0.4.0"
+bytemuck = { version = "1.25.0", features = ["derive"] }
+glam = "0.34.1"
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+log = "0.4.34"
+env_logger = "0.11.11"
+

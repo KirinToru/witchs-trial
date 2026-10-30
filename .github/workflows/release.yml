@@ -1,103 +1,115 @@
-name: Build and Release
+name: Release
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build:
+    name: Build Binary (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: witchs-trial-windows-x86_64.zip
+            binary_path: target/release/witchs-trial.exe
+          - os: ubuntu-latest
+            artifact_name: witchs-trial-linux-x86_64.tar.gz
+            binary_path: target/release/witchs-trial
+          - os: macos-latest
+            artifact_name: witchs-trial-macos-universal.tar.gz
+            binary_path: target/release/witchs-trial
 
     steps:
-      - name: Checkout code
+      - name: Checkout Source Code
         uses: actions/checkout@v4
-        
-      - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Configure CMake
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build Release
-        run: cmake --build build
-
-      - name: Package Build
-        run: |
-          mkdir release
-          Copy-Item build/WitchsTrial.exe release/
-          Copy-Item -Recurse assets release/assets
-          if (Test-Path build/*.dll) { Copy-Item build/*.dll release/ -ErrorAction SilentlyContinue }
-          if (Test-Path lib/*.dll) { Copy-Item lib/*.dll release/ -ErrorAction SilentlyContinue }
-          Compress-Archive -Path release/* -DestinationPath "WitchsTrial-${{ github.ref_name }}-win64.zip"
-        shell: pwsh
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          files: WitchsTrial-${{ github.ref_name }}-win64.zip
-          generate_release_notes: true
+          components: clippy
 
-  build-linux:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Install dependencies
+      - name: Install Linux Graphics Dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxrandr-dev libxcursor-dev libudev-dev libopenal-dev libflac-dev libvorbis-dev libgl1-mesa-dev libegl1-mesa-dev libxi-dev libfreetype6-dev libmbedtls-dev libssh2-1-dev libharfbuzz-dev libogg-dev libx11-dev libbrotli-dev libx11-xcb-dev libxcb-randr0-dev libxcb-image0-dev
+          sudo apt-get install -y libvulkan-dev libasound2-dev libudev-dev pkg-config
 
-      - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Verify Code Quality
+        run: cargo clippy --all-targets -- -D warnings
 
-      - name: Build Release
-        run: cmake --build build
+      - name: Run Test Suite
+        run: cargo test --all-targets
 
-      - name: Package Build
+      - name: Build Optimized Release Binary
+        run: cargo build --release
+
+      - name: Package Windows Binary
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          mkdir release
-          cp build/WitchsTrial release/
-          cp -r assets release/assets
-          mkdir -p release/lib
-          find build -name "*.so*" -exec cp {} release/lib/ \;
-          if [ -d "lib" ]; then cp -r lib/* release/lib/ || true; fi
-          cd release && tar -czvf ../WitchsTrial-${{ github.ref_name }}-linux64.tar.gz *
+          New-Item -ItemType Directory -Path staging -Force
+          Copy-Item target/release/witchs-trial.exe staging/
+          Copy-Item -Recurse assets staging/
+          Compress-Archive -Path staging/* -DestinationPath ${{ matrix.artifact_name }}
+          Get-FileHash -Path ${{ matrix.artifact_name }} -Algorithm SHA256 | Out-File -FilePath "${{ matrix.artifact_name }}.sha256"
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Package Unix Binary
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p staging
+          cp target/release/witchs-trial staging/
+          cp -r assets staging/
+          tar -czf ${{ matrix.artifact_name }} -C staging .
+          shasum -a 256 ${{ matrix.artifact_name }} > ${{ matrix.artifact_name }}.sha256
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: WitchsTrial-${{ github.ref_name }}-linux64.tar.gz
+          name: ${{ matrix.artifact_name }}
+          path: |
+            ${{ matrix.artifact_name }}
+            ${{ matrix.artifact_name }}.sha256
 
-  build-macos:
-    runs-on: macos-latest
-
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - name: Checkout code
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
-      - name: Build Release
-        run: cmake --build build
-
-      - name: Package Build
-        run: |
-          mkdir release
-          cp build/WitchsTrial release/
-          cp -r assets release/assets
-          mkdir -p release/lib
-          find build -name "*.dylib" -exec cp {} release/lib/ \;
-          if [ -d "lib" ]; then cp -r lib/* release/lib/ || true; fi
-          cd release && zip -r ../WitchsTrial-${{ github.ref_name }}-macos-arm64.zip *
-
-      - name: Create GitHub Release
+      - name: Create Structured Release
         uses: softprops/action-gh-release@v2
         with:
-          files: WitchsTrial-${{ github.ref_name }}-macos-arm64.zip
+          files: artifacts/**/*
+          generate_release_notes: true
+          body: |
+            # Witch's Trial Release
+
+            Automated multi-platform binary release built with wgpu and winit in Rust.
+
+            ## Checksums and Verification
+            Each release archive is accompanied by a SHA256 checksum file. Verify integrity using:
+            - Windows: `Get-FileHash -Algorithm SHA256 <archive>`
+            - Linux / macOS: `sha256sum -c <checksum_file>`
+
+            ## Architecture Overview
+            - Pure platformer precision physics with Swept AABB Continuous Collision Detection.
+            - Horizontal tile collider merging eliminating ghost-vertex snagging.
+            - Modular Player Finite State Machine (Idle, Walk, Jump, Fall, WallSlide, DashFreeze, Dash).
+            - Multi-backend rendering via wgpu (Vulkan, DirectX 12, Metal, OpenGL).
+            - Deterministic fixed-timestep loop (30Hz-300Hz) with sub-frame interpolation.

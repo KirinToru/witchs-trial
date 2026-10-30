@@ -1,75 +1,50 @@
-# ==============================================================================
-# 1. VISUAL STUDIO AND C++ STANDARD
-# ==============================================================================
-[Dd]ebug/
-[Dd]ebugPublic/
-[Rr]elease/
-[xX]64/
-[xX]86/
-[Bb]uild/
-bld/
-[Bb]in/
-[Oo]bj/
-[Oo]ut/
+# Rust build artifacts
+/target
+Cargo.lock.bak
 
-# User-specific properties
-*.user
-*.userosscache
-*.sln.docstates
-
-# Visual Studio cache
-.vs/
-
-# Compilation and linking
-*.obj
-*.pdb
-*.ipdb
-*.iobj
-*.idb
-*.ilk
+# Executables, libraries, and debug symbols
 *.exe
-*.exp
-*.lib
+*.dll
+*.so
+*.dylib
+*.pdb
 
-# ==============================================================================
-# 2. CMAKE
-# ==============================================================================
-build/
-cmake-build-debug/
-cmake-build-release/
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-*.cmake
-*.cache
-!CMakeLists.txt
+# Release packaging artifacts
+*.zip
+*.tar.gz
+*.sha256
 
-# ==============================================================================
-# 3. VISUAL STUDIO CODE
-# ==============================================================================
+# Configuration and local state
+settings.cfg
+*.local.cfg
+.env
+.env.*
+!.env.example
+
+# Logs and crash dumps
+*.log
+*.crash
+*.dump
+
+# Temporary and backup files
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# Tiled session and backup files
+*.tiled-session
+*.tiled-project-backup
+
+# IDE and editor files
+.idea/
 .vscode/
+.vs/
+*.sublime-project
+*.sublime-workspace
 
-# ==============================================================================
-# 4. DOXYGEN
-# ==============================================================================
-docs/doxygen/
-
-# ==============================================================================
-# 5. SYSTEM
-# ==============================================================================
+# OS generated files
 .DS_Store
 Thumbs.db
-
-# ==============================================================================
-# 6. GAME SPECIFIC
-# ==============================================================================
-*.dll
-!lib/*.dll
-docs/psd/
-
-# ==============================================================================
-# 7. AI
-# ==============================================================================
-docs/gemini_context.txt
-docs/ai_changelog.md
+desktop.ini
