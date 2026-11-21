@@ -121,6 +121,7 @@ impl Player {
 
     //------------[Resolve vertical collision]-------------------
     pub fn resolve_vertical_movement(&mut self, dt: f32, solid_tiles: &[AABB]) {
+        let was_grounded = self.grounded;
         self.pos.y += self.vel.y * dt;
         self.grounded = false;
         let mut player_box = self.aabb();
@@ -136,6 +137,17 @@ impl Player {
                     self.vel.y = 0.0;
                 }
                 player_box = self.aabb();
+            }
+        }
+
+        // If player was grounded and did not move vertically, verify solid ground contact
+        if !self.grounded && was_grounded && self.vel.y == 0.0 {
+            let ground_probe = AABB::from_pos_size(
+                Vec2::new(self.pos.x + 2.0, self.pos.y + self.size.y),
+                Vec2::new(self.size.x - 4.0, 1.0),
+            );
+            if solid_tiles.iter().any(|wall| ground_probe.overlaps(wall)) {
+                self.grounded = true;
             }
         }
     }

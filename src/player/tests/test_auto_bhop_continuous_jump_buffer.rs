@@ -16,7 +16,7 @@ fn test_auto_bhop_continuous_jump_buffer() {
 
     // 1. While airborne, holding Space must NOT load jump buffers
     player.grounded = false;
-    player.update(1.0 / 60.0, &input, &[], &[], &[], &[], &mut []);
+    player.update(1.0 / 60.0, &input, &[], &[], &[], &[], &[], &mut []);
 
     assert_eq!(player.jump_buffer_timer, 0.0);
     assert_eq!(player.wall_jump_buffer_timer, 0.0);
@@ -24,7 +24,7 @@ fn test_auto_bhop_continuous_jump_buffer() {
 
     // 2. While grounded, holding Space with auto-bhop must trigger jump
     player.grounded = true;
-    player.update(1.0 / 60.0, &input, &[], &[], &[], &[], &mut []);
+    player.update(1.0 / 60.0, &input, &[], &[], &[], &[], &[], &mut []);
 
     assert_eq!(player.jumps_count, 1);
     assert!(player.vel.y < 0.0);

@@ -201,6 +201,7 @@ impl Game {
                 &self.map.one_way_platforms,
                 &self.map.void_colliders,
                 &self.map.spike_colliders,
+                &self.map.ice_colliders,
                 &mut self.map.interactives,
             );
         }
@@ -286,6 +287,18 @@ impl Game {
             }
         }
 
+        // Ice colliders (cyan)
+        for ice in &self.map.ice_colliders {
+            if view_box.overlaps(ice) {
+                renderer.draw_debug_box(
+                    ice.min,
+                    ice.max - ice.min,
+                    [0.15, 0.80, 1.00, 0.25],
+                    [0.35, 0.95, 1.00, 0.95],
+                );
+            }
+        }
+
         // Void colliders (red)
         for void in &self.map.void_colliders {
             if view_box.overlaps(void) {
@@ -346,7 +359,7 @@ impl Game {
 
         // Diagnostic HUD panel
         let panel_pos = interp_camera + Vec2::new(6.0, 6.0);
-        let panel_size = Vec2::new(315.0, 172.0);
+        let panel_size = Vec2::new(330.0, 172.0);
         renderer.draw_debug_box(
             panel_pos,
             panel_size,
@@ -377,9 +390,10 @@ impl Game {
         } else {
             "-".to_string()
         };
+        let ice_str = if self.player.on_ice { "Y" } else { "N" };
 
         let hud_lines = format!(
-            "[DEBUG MONITOR - F3]\nFPS: {} ({:.1} ms) | STEP: {}\nBACKEND: {} | TIMESTEP: {}\nFORM: {} | IFRAMES: {}\nPOS: X: {:.1}, Y: {:.1}\nVEL: X: {:.1}, Y: {:.1} (SPD: {:.1})\nSTATE: {:?} | GRND: {} | FACE: {:.0}\nWALL: L:{} R:{} (LAST:{}) | SLIDE: {:.2}s\nDASH: {} | CD: {:.2}s\nMODE: {}\n[F4] CYCLE WINDOW MODE",
+            "[DEBUG MONITOR - F3]\nFPS: {} ({:.1} ms) | STEP: {}\nBACKEND: {} | TIMESTEP: {}\nFORM: {} | IFRAMES: {}\nPOS: X: {:.1}, Y: {:.1}\nVEL: X: {:.1}, Y: {:.1} (SPD: {:.1})\nSTATE: {:?} | GRND: {} (ICE:{}) | FACE: {:.0}\nWALL: L:{} R:{} (LAST:{}) | SLIDE: {:.2}s\nDASH: {} | CD: {:.2}s\nMODE: {}\n[F4] CYCLE WINDOW MODE",
             self.fps,
             self.frame_time_ms,
             step_label,
@@ -394,6 +408,7 @@ impl Game {
             speed,
             self.player.state,
             self.player.grounded,
+            ice_str,
             self.player.facing,
             self.player.walled_left,
             self.player.walled_right,

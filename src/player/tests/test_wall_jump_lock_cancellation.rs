@@ -14,6 +14,6 @@ fn test_wall_jump_lock_cancellation() {
     // Steering left (opposite direction to velocity) cancels the lock timer immediately
     input.on_key_event(PhysicalKey::Code(KeyCode::KeyA), winit::event::ElementState::Pressed);
 
-    player.update(0.01, &input, &[], &[], &[], &[], &mut []);
+    player.update(0.01, &input, &[], &[], &[], &[], &[], &mut []);
     assert_eq!(player.wall_jump_lock_timer, 0.0);
 }

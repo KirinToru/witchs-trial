@@ -16,7 +16,7 @@ fn test_beast_wall_stick_and_slide() {
     let mut input = InputState::new();
     input.on_key_event(PhysicalKey::Code(KeyCode::KeyD), winit::event::ElementState::Pressed);
 
-    player.update(0.02, &input, &[], &[], &[], &[], &mut []);
+    player.update(0.02, &input, &[], &[], &[], &[], &[], &mut []);
 
     // Beast mode sticks in place on wall without falling
     assert_eq!(player.vel.y, 0.0);
@@ -24,7 +24,7 @@ fn test_beast_wall_stick_and_slide() {
     // Now hold Down (KeyS) while still holding towards wall
     input.on_key_event(PhysicalKey::Code(KeyCode::KeyS), winit::event::ElementState::Pressed);
 
-    player.update(0.02, &input, &[], &[], &[], &[], &mut []);
+    player.update(0.02, &input, &[], &[], &[], &[], &[], &mut []);
 
     // When holding Down, player slides down along wall
     assert!(player.vel.y > 0.0);

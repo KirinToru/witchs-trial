@@ -20,7 +20,7 @@ fn test_beast_physics_multipliers() {
     player.grounded = true;
     let mut input = InputState::new();
     input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Pressed);
-    player.update(0.01, &input, &[], &[], &[], &[], &mut []);
+    player.update(0.01, &input, &[], &[], &[], &[], &[], &mut []);
     assert_eq!(player.vel.y, -520.0 * BEAST_JUMP_MULT + 12.0);
 
     // 3. Verify wall jump impulse with multiplier (-500 * 1.25 = -625, plus 12.0 ascending gravity)
@@ -30,7 +30,7 @@ fn test_beast_physics_multipliers() {
     input.clear_frame_edges();
     input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Released);
     input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Pressed);
-    player.update(0.01, &input, &[], &[], &[], &[], &mut []);
+    player.update(0.01, &input, &[], &[], &[], &[], &[], &mut []);
     assert_eq!(player.vel.y, -500.0 * BEAST_JUMP_MULT + 12.0);
 
     // 4. Verify dash speed and duration multipliers
@@ -39,7 +39,7 @@ fn test_beast_physics_multipliers() {
     dash_player.dash_freeze_timer = 0.01;
     let no_input = InputState::new();
     let dt = 0.02;
-    dash_player.update(dt, &no_input, &[], &[], &[], &[], &mut []);
+    dash_player.update(dt, &no_input, &[], &[], &[], &[], &[], &mut []);
 
     assert_eq!(dash_player.state, PlayerState::Dash);
     // Initial duration 0.30s (0.20 * 1.5) minus dt (0.02) equals 0.28s

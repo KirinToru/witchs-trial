@@ -27,6 +27,11 @@ pub const BEAST_DASH_DURATION_MULT: f32 = 1.50;
 pub const BEAST_HIT_KNOCKBACK_X: f32 = 320.0;
 pub const BEAST_HIT_KNOCKBACK_Y: f32 = -380.0;
 
+// Multipliers and physics constants for Ice surfaces
+pub const ICE_SPEED_MULT: f32 = 1.35;
+pub const ICE_ACCEL: f32 = 450.0;
+pub const ICE_FRICTION: f32 = 250.0;
+
 pub struct Player {
     pub pos: Vec2,
     pub prev_pos: Vec2,
@@ -34,6 +39,8 @@ pub struct Player {
     pub size: Vec2,
     pub facing: f32,
     pub grounded: bool,
+    pub on_ice: bool,
+    pub ice_jump_active: bool,
     pub state: PlayerState,
     pub dead: bool,
     pub form: PlayerForm,
@@ -78,6 +85,8 @@ impl Player {
             size: Vec2::new(18.0, 26.0),
             facing: 1.0,
             grounded: false,
+            on_ice: false,
+            ice_jump_active: false,
             state: PlayerState::Idle,
             dead: false,
             form: PlayerForm::Witch,
@@ -132,6 +141,8 @@ impl Player {
         self.prev_pos = reset_pos;
         self.vel = Vec2::ZERO;
         self.grounded = false;
+        self.on_ice = false;
+        self.ice_jump_active = false;
         self.state = PlayerState::Idle;
         self.dead = false;
         self.form = PlayerForm::Witch;
@@ -167,6 +178,21 @@ impl Player {
         AABB::new(self.pos + inset, self.pos + self.size - inset)
     }
 
+    //------------[Check if player is standing on ice]-------------------
+    pub fn check_on_ice(&self, ice_tiles: &[AABB]) -> bool {
+        if !self.grounded {
+            return false;
+        }
+        let probe_height = 2.0;
+        let probe_inset = 2.0;
+        let probe_width = self.size.x - probe_inset * 2.0;
+        let ice_probe = AABB::from_pos_size(
+            Vec2::new(self.pos.x + probe_inset, self.pos.y + self.size.y),
+            Vec2::new(probe_width, probe_height),
+        );
+        ice_tiles.iter().any(|ice| ice_probe.overlaps(ice))
+    }
+
     //------------[Update player physics and state]-------------------
     pub fn update(
         &mut self,
@@ -176,6 +202,7 @@ impl Player {
         one_way_platforms: &[AABB],
         void_tiles: &[AABB],
         spike_tiles: &[AABB],
+        ice_tiles: &[AABB],
         interactives: &mut [InteractiveTile],
     ) {
         if self.dead {
@@ -186,6 +213,10 @@ impl Player {
         self.prev_pos = self.pos;
 
         let was_grounded = self.grounded;
+        let was_on_ice = self.on_ice;
+
+        // Detect ice surface under feet before movement logic
+        self.on_ice = self.check_on_ice(ice_tiles);
 
         // Timers and buffers update
         if self.status_timer > 0.0 {
@@ -405,12 +436,12 @@ impl Player {
             } else {
                 1.0
             };
-            let max_ground_speed = 250.0 * speed_mult;
-            let max_air_speed = 300.0 * speed_mult;
+            let max_ground_speed =
+                250.0 * speed_mult * if self.on_ice { ICE_SPEED_MULT } else { 1.0 };
 
             if self.grounded {
-                let accel = 1800.0;
-                let friction = 2000.0;
+                let accel = if self.on_ice { ICE_ACCEL } else { 1800.0 };
+                let friction = if self.on_ice { ICE_FRICTION } else { 2000.0 };
 
                 if self.bhop_timer > 0.0 && self.is_bhopping {
                     // Skip ground friction during active bhop window
@@ -431,16 +462,36 @@ impl Player {
                     }
                 }
             } else {
-                // In air: speed cap scales with form
+                // Cancel ice jump bonus on air counter-steer
+                if self.ice_jump_active
+                    && move_x != 0.0
+                    && move_x.signum() != self.vel.x.signum()
+                    && self.vel.x.abs() > 20.0
+                {
+                    self.ice_jump_active = false;
+                }
+
+                let effective_air_cap = 300.0
+                    * speed_mult
+                    * if self.ice_jump_active {
+                        ICE_SPEED_MULT
+                    } else {
+                        1.0
+                    };
+
+                // In air: speed cap scales with form and ice jump
                 if move_x != 0.0 {
                     self.facing = move_x;
                     if self.is_bhopping && move_x.signum() == self.vel.x.signum() {
-                        self.vel.x = move_towards(self.vel.x, move_x * max_air_speed, 420.0 * dt);
+                        self.vel.x =
+                            move_towards(self.vel.x, move_x * effective_air_cap, 420.0 * dt);
                     } else {
                         let target_speed = if self.is_bhopping {
-                            self.vel.x.abs().min(max_air_speed)
+                            self.vel.x.abs().min(effective_air_cap)
+                        } else if self.ice_jump_active {
+                            (250.0 * speed_mult * ICE_SPEED_MULT).min(effective_air_cap)
                         } else {
-                            max_ground_speed
+                            250.0 * speed_mult
                         };
                         let air_accel =
                             if move_x.signum() != self.vel.x.signum() && self.vel.x.abs() > 20.0 {
@@ -455,16 +506,23 @@ impl Player {
                         }
                     }
                 } else if !self.is_bhopping {
-                    if self.vel.x.abs() > max_ground_speed {
+                    let air_base_speed = 250.0
+                        * speed_mult
+                        * if self.ice_jump_active {
+                            ICE_SPEED_MULT
+                        } else {
+                            1.0
+                        };
+                    if self.vel.x.abs() > air_base_speed {
                         self.vel.x = move_towards(
                             self.vel.x,
-                            self.vel.x.signum() * max_ground_speed,
+                            self.vel.x.signum() * air_base_speed,
                             950.0 * dt,
                         );
                     }
                 }
 
-                self.vel.x = self.vel.x.clamp(-max_air_speed, max_air_speed);
+                self.vel.x = self.vel.x.clamp(-effective_air_cap, effective_air_cap);
             }
         }
 
@@ -557,10 +615,16 @@ impl Player {
             self.is_bhopping = false;
             // Record last used wall direction (-1 for left, 1 for right)
             self.last_wall_dir = Some(wall_dir);
+            // Wall jump cancels ice jump momentum bonus
+            self.ice_jump_active = false;
         } else if ((self.jump_buffer_timer > 0.0 && (self.grounded || self.coyote_timer > 0.0))
             || (self.grounded && self.auto_bhop && input.is_pressed(Key::Jump)))
             && self.dash_timer <= 0.0
         {
+            // Activate ice jump momentum preservation when launching from ice
+            if self.on_ice || (self.coyote_timer > 0.0 && was_on_ice) {
+                self.ice_jump_active = true;
+            }
             let speed_mult = if self.form == PlayerForm::Beast {
                 BEAST_SPEED_MULT
             } else {
@@ -571,7 +635,13 @@ impl Player {
             } else {
                 1.0
             };
-            let max_air_speed = 300.0 * speed_mult;
+            let max_air_speed = 300.0
+                * speed_mult
+                * if self.ice_jump_active {
+                    ICE_SPEED_MULT
+                } else {
+                    1.0
+                };
             // Bunnyhop chain timing
             let is_bhop_timing = (self.bhop_timer > 0.0 && self.is_bhopping)
                 || (self.auto_bhop && input.is_pressed(Key::Jump) && self.vel.x.abs() > 80.0);
@@ -653,10 +723,18 @@ impl Player {
             }
         }
 
+        // Reset ice jump bonus when on ground or hitting a horizontal obstacle
+        if self.grounded || self.vel.x == 0.0 {
+            self.ice_jump_active = false;
+        }
+
         // Reset wall jump limit when on ground
         if self.grounded {
             self.last_wall_dir = None;
         }
+
+        // Re-check ice under feet after position updates
+        self.on_ice = self.check_on_ice(ice_tiles);
 
         // Wall proximity probes
         self.update_wall_probes(solid_tiles);

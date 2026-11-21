@@ -4,3 +4,4 @@ mod test_dynamic_tileset_resolution;
 mod test_extract_all_layers;
 mod test_merge_horizontal_colliders_contiguous;
 mod test_merge_horizontal_colliders_gaps_and_rows;
+mod test_ice_collider_merging;

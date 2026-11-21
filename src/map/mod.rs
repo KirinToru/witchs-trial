@@ -56,6 +56,7 @@ pub struct TmxMap {
     pub visuals: Vec<TileVisual>,
     pub solid_colliders: Vec<AABB>,
     pub one_way_platforms: Vec<AABB>,
+    pub ice_colliders: Vec<AABB>,
     pub void_colliders: Vec<AABB>,
     pub spike_colliders: Vec<AABB>,
     pub interactives: Vec<InteractiveTile>,
@@ -89,6 +90,7 @@ impl TmxMap {
         let mut visuals = Vec::new();
         let mut solid_tile_coords = Vec::new();
         let mut one_way_tile_coords = Vec::new();
+        let mut ice_tile_coords = Vec::new();
         let mut void_colliders = Vec::new();
         let mut spike_colliders = Vec::new();
         let mut interactives = Vec::new();
@@ -173,6 +175,11 @@ impl TmxMap {
                             9 => {
                                 one_way_tile_coords.push((col, row));
                             }
+                            11 => {
+                                // Ice tile acts as a solid collider (preventing seams) and registers as ice
+                                solid_tile_coords.push((col, row));
+                                ice_tile_coords.push((col, row));
+                            }
                             12 => {
                                 let void_box = AABB::from_pos_size(
                                     pos + Vec2::new(2.0, 2.0),
@@ -193,6 +200,7 @@ impl TmxMap {
         // Merge horizontal colliders in the same row
         let solid_colliders = merge_horizontal_colliders(&solid_tile_coords, tile_size);
         let one_way_platforms = merge_horizontal_colliders(&one_way_tile_coords, tile_size);
+        let ice_colliders = merge_horizontal_colliders(&ice_tile_coords, tile_size);
 
         // Fallback spawn check in object groups
         if interactives.iter().all(|i| i.kind != InteractiveKind::SpawnPoint) {
@@ -245,6 +253,7 @@ impl TmxMap {
             visuals,
             solid_colliders,
             one_way_platforms,
+            ice_colliders,
             void_colliders,
             spike_colliders,
             interactives,

@@ -20,3 +20,6 @@ mod test_beast_spike_hit_reversion_and_iframes;
 mod test_void_instant_death_in_beast_mode;
 mod test_auto_bhop_no_accidental_wall_jump;
 mod test_wall_jump_short_buffer_cleared_on_ground_jump;
+mod test_ice_speed_limit;
+mod test_ice_accel_and_friction;
+mod test_ice_jump_momentum_preservation;
