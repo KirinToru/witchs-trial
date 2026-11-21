@@ -11,13 +11,13 @@ fn test_air_speed_limit() {
     player.vel.x = 500.0;
 
     let input = InputState::new();
-    player.update(1.0 / 60.0, &input, &[], &[], &[], &mut []);
+    player.update(1.0 / 60.0, &input, &[], &[], &[], &[], &mut []);
 
     // Air speed clamp must restrict horizontal velocity to 300 px/s
     assert!(player.vel.x <= 300.0);
 
     // Test negative air speed clamp
     player.vel.x = -650.0;
-    player.update(1.0 / 60.0, &input, &[], &[], &[], &mut []);
+    player.update(1.0 / 60.0, &input, &[], &[], &[], &[], &mut []);
     assert!(player.vel.x >= -300.0);
 }

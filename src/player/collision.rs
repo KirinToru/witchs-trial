@@ -9,6 +9,41 @@ impl Player {
         hazard_tiles.iter().any(|h| box_hurt.overlaps(h))
     }
 
+    //------------[Handle spike hazard collision and damage]-------------------
+    pub fn handle_spike_collision(&mut self, spike_tiles: &[AABB]) {
+        if !self.check_hazard_collision(spike_tiles) {
+            return;
+        }
+        // Spikes are ignored while invulnerable
+        if self.invuln_timer > 0.0 {
+            return;
+        }
+
+        match self.form {
+            super::PlayerForm::Beast => {
+                // Revert to Witch form and gain 2.0s invulnerability
+                self.form = super::PlayerForm::Witch;
+                self.invuln_timer = 2.0;
+                self.knockback_lock_timer = 0.15;
+                self.dash_timer = 0.0;
+                self.dash_freeze_timer = 0.0;
+
+                // Push away from velocity or facing direction
+                let knockback_dir = if self.vel.x.abs() > 10.0 {
+                    -self.vel.x.signum()
+                } else {
+                    -self.facing.signum()
+                };
+                self.vel.x = knockback_dir * super::BEAST_HIT_KNOCKBACK_X;
+                self.vel.y = super::BEAST_HIT_KNOCKBACK_Y;
+                self.grounded = false;
+            }
+            super::PlayerForm::Witch => {
+                self.dead = true;
+            }
+        }
+    }
+
     //------------[Execute sub-stepped movement and collision]-------------------
     // Splits movement into safe sub-steps if velocity is high to prevent tunneling
     pub fn move_and_collide(
@@ -17,7 +52,8 @@ impl Player {
         dropping_down: bool,
         solid_tiles: &[AABB],
         one_way_platforms: &[AABB],
-        hazard_tiles: &[AABB],
+        void_tiles: &[AABB],
+        spike_tiles: &[AABB],
     ) {
         // Calculate maximum axis displacement
         let max_displacement = (self.vel.x.abs() * dt).max(self.vel.y.abs() * dt);
@@ -28,9 +64,15 @@ impl Player {
         for _ in 0..steps {
             let step_prev_pos = self.pos;
 
-            // Check hazard before sub-step move
-            if self.check_hazard_collision(hazard_tiles) {
+            // Check void before sub-step move (instant death)
+            if self.check_hazard_collision(void_tiles) {
                 self.dead = true;
+                break;
+            }
+
+            // Check spike collision before sub-step move
+            self.handle_spike_collision(spike_tiles);
+            if self.dead {
                 break;
             }
 
@@ -43,9 +85,15 @@ impl Player {
             // Resolve one-way platforms using start position of this sub-step
             self.resolve_one_way_platforms(step_prev_pos, dropping_down, one_way_platforms);
 
-            // Check hazard after sub-step move
-            if self.check_hazard_collision(hazard_tiles) {
+            // Check void after sub-step move (instant death)
+            if self.check_hazard_collision(void_tiles) {
                 self.dead = true;
+                break;
+            }
+
+            // Check spike collision after sub-step move
+            self.handle_spike_collision(spike_tiles);
+            if self.dead {
                 break;
             }
         }

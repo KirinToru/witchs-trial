@@ -86,6 +86,11 @@ impl Game {
     pub fn full_restart(&mut self) {
         self.player.reset(self.map.initial_spawn_pos);
         self.player.checkpoint_pos = self.map.initial_spawn_pos;
+        for item in &mut self.map.interactives {
+            if item.kind == crate::map::InteractiveKind::Moon {
+                item.activated = false;
+            }
+        }
         self.snap_camera_to_player();
         self.fade_alpha = 0.0;
         self.fading_out = false;
@@ -109,6 +114,11 @@ impl Game {
     pub fn reset_level(&mut self) {
         let respawn_pos = self.player.checkpoint_pos;
         self.player.reset(respawn_pos);
+        for item in &mut self.map.interactives {
+            if item.kind == crate::map::InteractiveKind::Moon {
+                item.activated = false;
+            }
+        }
         self.snap_camera_to_player();
         self.death_counted = false;
     }
@@ -189,7 +199,8 @@ impl Game {
                 input,
                 &self.map.solid_colliders,
                 &self.map.one_way_platforms,
-                &self.map.hazard_colliders,
+                &self.map.void_colliders,
+                &self.map.spike_colliders,
                 &mut self.map.interactives,
             );
         }
@@ -275,14 +286,26 @@ impl Game {
             }
         }
 
-        // Hazard colliders (red)
-        for hazard in &self.map.hazard_colliders {
-            if view_box.overlaps(hazard) {
+        // Void colliders (red)
+        for void in &self.map.void_colliders {
+            if view_box.overlaps(void) {
                 renderer.draw_debug_box(
-                    hazard.min,
-                    hazard.max - hazard.min,
+                    void.min,
+                    void.max - void.min,
                     [0.95, 0.05, 0.05, 0.35],
                     [1.00, 0.15, 0.15, 0.95],
+                );
+            }
+        }
+
+        // Spike colliders (orange)
+        for spike in &self.map.spike_colliders {
+            if view_box.overlaps(spike) {
+                renderer.draw_debug_box(
+                    spike.min,
+                    spike.max - spike.min,
+                    [0.95, 0.40, 0.05, 0.30],
+                    [1.00, 0.55, 0.10, 0.90],
                 );
             }
         }
@@ -323,7 +346,7 @@ impl Game {
 
         // Diagnostic HUD panel
         let panel_pos = interp_camera + Vec2::new(6.0, 6.0);
-        let panel_size = Vec2::new(315.0, 158.0);
+        let panel_size = Vec2::new(315.0, 172.0);
         renderer.draw_debug_box(
             panel_pos,
             panel_size,
@@ -345,13 +368,25 @@ impl Game {
             _ => "-",
         };
 
+        let form_str = match self.player.form {
+            crate::player::PlayerForm::Witch => "WITCH",
+            crate::player::PlayerForm::Beast => "BEAST",
+        };
+        let iframes_str = if self.player.invuln_timer > 0.0 {
+            format!("{:.1}s", self.player.invuln_timer)
+        } else {
+            "-".to_string()
+        };
+
         let hud_lines = format!(
-            "[DEBUG MONITOR - F3]\nFPS: {} ({:.1} ms) | STEP: {}\nBACKEND: {} | TIMESTEP: {}\nPOS: X: {:.1}, Y: {:.1}\nVEL: X: {:.1}, Y: {:.1} (SPD: {:.1})\nSTATE: {:?} | GRND: {} | FACE: {:.0}\nWALL: L:{} R:{} (LAST:{}) | SLIDE: {:.2}s\nDASH: {} | CD: {:.2}s\nMODE: {}\n[F4] CYCLE WINDOW MODE",
+            "[DEBUG MONITOR - F3]\nFPS: {} ({:.1} ms) | STEP: {}\nBACKEND: {} | TIMESTEP: {}\nFORM: {} | IFRAMES: {}\nPOS: X: {:.1}, Y: {:.1}\nVEL: X: {:.1}, Y: {:.1} (SPD: {:.1})\nSTATE: {:?} | GRND: {} | FACE: {:.0}\nWALL: L:{} R:{} (LAST:{}) | SLIDE: {:.2}s\nDASH: {} | CD: {:.2}s\nMODE: {}\n[F4] CYCLE WINDOW MODE",
             self.fps,
             self.frame_time_ms,
             step_label,
             self.active_backend_name,
             self.timestep_mode_name,
+            form_str,
+            iframes_str,
             self.player.pos.x,
             self.player.pos.y,
             self.player.vel.x,

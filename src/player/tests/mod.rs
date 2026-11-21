@@ -13,3 +13,8 @@ mod test_dash_substepping_tunneling_prevention;
 mod test_wall_jump_same_wall_limit;
 mod test_wall_jump_alternating_walls;
 mod test_wall_jump_ground_reset;
+mod test_moon_pickup_beast_transformation;
+mod test_beast_physics_multipliers;
+mod test_beast_wall_stick_and_slide;
+mod test_beast_spike_hit_reversion_and_iframes;
+mod test_void_instant_death_in_beast_mode;

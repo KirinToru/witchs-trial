@@ -14,7 +14,7 @@ fn test_wall_jump_ground_reset() {
     input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Pressed);
 
     // 1. Jump off left wall in air
-    player.update(0.01, &input, &[], &[], &[], &mut []);
+    player.update(0.01, &input, &[], &[], &[], &[], &mut []);
     assert_eq!(player.jumps_count, 1);
     assert_eq!(player.last_wall_dir, Some(-1));
 
@@ -22,7 +22,7 @@ fn test_wall_jump_ground_reset() {
     input.clear_frame_edges();
     input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Released);
     player.grounded = true;
-    player.update(0.01, &input, &[], &[], &[], &mut []);
+    player.update(0.01, &input, &[], &[], &[], &[], &mut []);
 
     // Ground contact resets the last wall limit without performing another jump
     assert_eq!(player.jumps_count, 1);
@@ -34,7 +34,7 @@ fn test_wall_jump_ground_reset() {
     player.walled_right = false;
     input.clear_frame_edges();
     input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Pressed);
-    player.update(0.01, &input, &[], &[], &[], &mut []);
+    player.update(0.01, &input, &[], &[], &[], &[], &mut []);
 
     // Jumping off left wall succeeds again after landing
     assert_eq!(player.jumps_count, 2);

@@ -14,6 +14,7 @@ pub enum InteractiveKind {
     Checkpoint,
     LevelExit,
     Light,
+    Moon,
 }
 
 pub struct InteractiveTile {
@@ -55,7 +56,8 @@ pub struct TmxMap {
     pub visuals: Vec<TileVisual>,
     pub solid_colliders: Vec<AABB>,
     pub one_way_platforms: Vec<AABB>,
-    pub hazard_colliders: Vec<AABB>,
+    pub void_colliders: Vec<AABB>,
+    pub spike_colliders: Vec<AABB>,
     pub interactives: Vec<InteractiveTile>,
     pub bricks_texture: Texture,
     pub prototype_texture: Texture,
@@ -87,7 +89,8 @@ impl TmxMap {
         let mut visuals = Vec::new();
         let mut solid_tile_coords = Vec::new();
         let mut one_way_tile_coords = Vec::new();
-        let mut hazard_colliders = Vec::new();
+        let mut void_colliders = Vec::new();
+        let mut spike_colliders = Vec::new();
         let mut interactives = Vec::new();
         let mut initial_spawn_pos = Vec2::new(100.0, 100.0);
 
@@ -109,14 +112,17 @@ impl TmxMap {
                 if let Some((mapping, local_id)) = resolve_tile(gid, &tileset_mappings) {
                     let (u0, u1, v0, v1) = calc_tile_uv(local_id, mapping.cols, mapping.rows);
 
-                    visuals.push(TileVisual {
-                        pos,
-                        rot_deg,
-                        scale,
-                        uv_min: Vec2::new(u0, v0),
-                        uv_max: Vec2::new(u1, v1),
-                        tileset: mapping.kind,
-                    });
+                    // Skip static visual for collectible Moon to prevent duplicate rendering
+                    if !(mapping.kind == TilesetKind::Main && local_id == 1) {
+                        visuals.push(TileVisual {
+                            pos,
+                            rot_deg,
+                            scale,
+                            uv_min: Vec2::new(u0, v0),
+                            uv_max: Vec2::new(u1, v1),
+                            tileset: mapping.kind,
+                        });
+                    }
 
                     if mapping.kind == TilesetKind::Main {
                         match local_id {
@@ -127,6 +133,14 @@ impl TmxMap {
                                     size,
                                     kind: InteractiveKind::SpawnPoint,
                                     activated: true,
+                                });
+                            }
+                            1 => {
+                                interactives.push(InteractiveTile {
+                                    pos,
+                                    size,
+                                    kind: InteractiveKind::Moon,
+                                    activated: false,
                                 });
                             }
                             3 => {
@@ -164,10 +178,10 @@ impl TmxMap {
                                     pos + Vec2::new(2.0, 2.0),
                                     size - Vec2::new(4.0, 4.0),
                                 );
-                                hazard_colliders.push(void_box);
+                                void_colliders.push(void_box);
                             }
                             13 => {
-                                hazard_colliders.push(calculate_spike_aabb(pos, rot_deg, scale));
+                                spike_colliders.push(calculate_spike_aabb(pos, rot_deg, scale));
                             }
                             _ => {}
                         }
@@ -231,7 +245,8 @@ impl TmxMap {
             visuals,
             solid_colliders,
             one_way_platforms,
-            hazard_colliders,
+            void_colliders,
+            spike_colliders,
             interactives,
             bricks_texture,
             prototype_texture,
@@ -271,6 +286,27 @@ impl TmxMap {
                     &tex.bind_group,
                     tint,
                 );
+            }
+        }
+
+        // Render unactivated Moon collectible items
+        let (moon_u0, moon_u1, moon_v0, moon_v1) = calc_tile_uv(1, 8.0, 8.0);
+        for item in &self.interactives {
+            if item.kind == InteractiveKind::Moon && !item.activated {
+                let item_box = AABB::from_pos_size(item.pos, item.size);
+                if view_box.overlaps(&item_box) {
+                    renderer.draw_texture_rect_rotated(
+                        item.pos,
+                        item.size,
+                        0.0,
+                        Vec2::ONE,
+                        Vec2::new(moon_u0, moon_v0),
+                        Vec2::new(moon_u1, moon_v1),
+                        self.main_texture.id,
+                        &self.main_texture.bind_group,
+                        [1.0, 1.0, 1.0, 1.0],
+                    );
+                }
             }
         }
     }

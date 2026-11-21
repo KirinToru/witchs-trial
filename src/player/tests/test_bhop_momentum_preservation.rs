@@ -16,7 +16,7 @@ fn test_bhop_momentum_preservation() {
     let mut input = InputState::new();
     input.on_key_event(PhysicalKey::Code(KeyCode::KeyD), winit::event::ElementState::Pressed);
 
-    player.update(1.0 / 60.0, &input, &[], &[], &[], &mut []);
+    player.update(1.0 / 60.0, &input, &[], &[], &[], &[], &mut []);
 
     // Full velocity preserved without ground friction deceleration
     assert!(player.is_bhopping);

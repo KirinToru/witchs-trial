@@ -13,6 +13,20 @@ pub mod state;
 pub use kinematics::move_towards;
 pub use state::PlayerState;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlayerForm {
+    Witch,
+    Beast,
+}
+
+// Multipliers and parameters for The Beast transformation
+pub const BEAST_SPEED_MULT: f32 = 1.40;
+pub const BEAST_JUMP_MULT: f32 = 1.25;
+pub const BEAST_DASH_SPEED_MULT: f32 = 1.35;
+pub const BEAST_DASH_DURATION_MULT: f32 = 1.50;
+pub const BEAST_HIT_KNOCKBACK_X: f32 = 320.0;
+pub const BEAST_HIT_KNOCKBACK_Y: f32 = -380.0;
+
 pub struct Player {
     pub pos: Vec2,
     pub prev_pos: Vec2,
@@ -22,6 +36,9 @@ pub struct Player {
     pub grounded: bool,
     pub state: PlayerState,
     pub dead: bool,
+    pub form: PlayerForm,
+    pub invuln_timer: f32,
+    pub knockback_lock_timer: f32,
     pub checkpoint_pos: Vec2,
     pub walled_left: bool,
     pub walled_right: bool,
@@ -62,6 +79,9 @@ impl Player {
             grounded: false,
             state: PlayerState::Idle,
             dead: false,
+            form: PlayerForm::Witch,
+            invuln_timer: 0.0,
+            knockback_lock_timer: 0.0,
             checkpoint_pos: spawn_pos,
             walled_left: false,
             walled_right: false,
@@ -112,6 +132,9 @@ impl Player {
         self.grounded = false;
         self.state = PlayerState::Idle;
         self.dead = false;
+        self.form = PlayerForm::Witch;
+        self.invuln_timer = 0.0;
+        self.knockback_lock_timer = 0.0;
         self.walled_left = false;
         self.walled_right = false;
         self.last_wall_dir = None;
@@ -148,7 +171,8 @@ impl Player {
         input: &InputState,
         solid_tiles: &[AABB],
         one_way_platforms: &[AABB],
-        hazard_tiles: &[AABB],
+        void_tiles: &[AABB],
+        spike_tiles: &[AABB],
         interactives: &mut [InteractiveTile],
     ) {
         if self.dead {
@@ -166,6 +190,12 @@ impl Player {
             if self.status_timer <= 0.0 {
                 self.status_message = None;
             }
+        }
+        if self.invuln_timer > 0.0 {
+            self.invuln_timer = (self.invuln_timer - dt).max(0.0);
+        }
+        if self.knockback_lock_timer > 0.0 {
+            self.knockback_lock_timer = (self.knockback_lock_timer - dt).max(0.0);
         }
         if self.wall_jump_lock_timer > 0.0 {
             self.wall_jump_lock_timer -= dt;
@@ -206,6 +236,20 @@ impl Player {
             self.dash_buffer_timer -= dt;
         }
 
+        // Moon collectible overlap check (activates The Beast transformation)
+        let player_box = self.aabb();
+        for item in interactives.iter_mut() {
+            if item.kind == InteractiveKind::Moon && !item.activated {
+                let item_box = AABB::from_pos_size(item.pos, item.size);
+                if player_box.overlaps(&item_box) {
+                    item.activated = true;
+                    self.form = PlayerForm::Beast;
+                    self.status_message = Some("The Beast Unleashed!".to_string());
+                    self.status_timer = 2.0;
+                }
+            }
+        }
+
         // Checkpoint / exit interaction (W key)
         if input.is_just_pressed(Key::Interact) {
             let player_center = self.pos + self.size * 0.5;
@@ -230,7 +274,7 @@ impl Player {
                                 Some("Level Completed! Press R to Restart".to_string());
                             self.status_timer = 3.0;
                         }
-                        InteractiveKind::Light => {}
+                        InteractiveKind::Light | InteractiveKind::Moon => {}
                     }
                 }
             }
@@ -268,9 +312,20 @@ impl Player {
             self.state = PlayerState::DashFreeze;
 
             if self.dash_freeze_timer <= 0.0 {
-                // Launch horizontal impulse at 600 px/s
-                self.dash_timer = 0.20;
-                self.vel.x = self.dash_dir * 600.0;
+                let dash_dur = 0.20
+                    * if self.form == PlayerForm::Beast {
+                        BEAST_DASH_DURATION_MULT
+                    } else {
+                        1.0
+                    };
+                let dash_spd = 600.0
+                    * if self.form == PlayerForm::Beast {
+                        BEAST_DASH_SPEED_MULT
+                    } else {
+                        1.0
+                    };
+                self.dash_timer = dash_dur;
+                self.vel.x = self.dash_dir * dash_spd;
                 self.vel.y = 0.0;
                 self.state = PlayerState::Dash;
             } else {
@@ -278,20 +333,38 @@ impl Player {
             }
         }
 
-        // Dash impulse phase (smooth speed taper 600 -> 300)
+        // Dash impulse phase (smooth speed taper from max to exit speed)
         if self.dash_timer > 0.0 {
             self.dash_timer -= dt;
             self.vel.y = 0.0;
             self.state = PlayerState::Dash;
 
-            let t = (self.dash_timer / 0.20).clamp(0.0, 1.0);
-            let current_dash_speed = 300.0 + (600.0 - 300.0) * t;
+            let dash_dur = 0.20
+                * if self.form == PlayerForm::Beast {
+                    BEAST_DASH_DURATION_MULT
+                } else {
+                    1.0
+                };
+            let max_dash_spd = 600.0
+                * if self.form == PlayerForm::Beast {
+                    BEAST_DASH_SPEED_MULT
+                } else {
+                    1.0
+                };
+            let exit_dash_spd = 300.0
+                * if self.form == PlayerForm::Beast {
+                    BEAST_DASH_SPEED_MULT
+                } else {
+                    1.0
+                };
+
+            let t = (self.dash_timer / dash_dur).clamp(0.0, 1.0);
+            let current_dash_speed = exit_dash_spd + (max_dash_spd - exit_dash_spd) * t;
             self.vel.x = self.dash_dir * current_dash_speed;
 
             if self.dash_timer <= 0.0 {
-                let exit_speed = 300.0;
-                self.vel.x = self.dash_dir * exit_speed;
-                self.bhop_velocity = self.dash_dir * exit_speed;
+                self.vel.x = self.dash_dir * exit_dash_spd;
+                self.bhop_velocity = self.dash_dir * exit_dash_spd;
                 self.bhop_timer = 0.25;
                 self.is_bhopping = true;
                 self.bhop_chain = 1;
@@ -314,9 +387,17 @@ impl Player {
             self.wall_jump_lock_timer = 0.0;
         }
 
-        if self.dash_timer <= 0.0 && self.wall_jump_lock_timer <= 0.0 {
-            let max_ground_speed = 250.0;
-            let max_air_speed = 300.0;
+        if self.dash_timer <= 0.0
+            && self.wall_jump_lock_timer <= 0.0
+            && self.knockback_lock_timer <= 0.0
+        {
+            let speed_mult = if self.form == PlayerForm::Beast {
+                BEAST_SPEED_MULT
+            } else {
+                1.0
+            };
+            let max_ground_speed = 250.0 * speed_mult;
+            let max_air_speed = 300.0 * speed_mult;
 
             if self.grounded {
                 let accel = 1800.0;
@@ -341,7 +422,7 @@ impl Player {
                     }
                 }
             } else {
-                // In air: speed cap is 300 px/s
+                // In air: speed cap scales with form
                 if move_x != 0.0 {
                     self.facing = move_x;
                     if self.is_bhopping && move_x.signum() == self.vel.x.signum() {
@@ -378,20 +459,39 @@ impl Player {
             }
         }
 
-        // Wall slide check
+        // Wall interaction check (Witch vs Beast)
         let is_touching_wall_direction = (!self.grounded)
             && ((self.walled_left && move_x < 0.0) || (self.walled_right && move_x > 0.0));
 
         let mut is_wall_sliding = false;
 
         if is_touching_wall_direction && self.dash_timer <= 0.0 && self.vel.y >= -180.0 {
-            is_wall_sliding = true;
-            self.wall_slide_timer += dt;
-            let initial_slide_speed = 35.0;
-            let slide_acceleration = 480.0;
-            let max_slide_speed = 440.0;
-            self.vel.y = (initial_slide_speed + self.wall_slide_timer * slide_acceleration)
-                .min(max_slide_speed);
+            if self.form == PlayerForm::Beast {
+                if input.is_pressed(Key::Down) {
+                    // Beast wall slide when holding Down
+                    is_wall_sliding = true;
+                    self.wall_slide_timer += dt;
+                    let initial_slide_speed = 35.0;
+                    let slide_acceleration = 480.0;
+                    let max_slide_speed = 440.0;
+                    self.vel.y = (initial_slide_speed + self.wall_slide_timer * slide_acceleration)
+                        .min(max_slide_speed);
+                } else {
+                    // Beast stick to wall in place without falling
+                    is_wall_sliding = true;
+                    self.wall_slide_timer = 0.0;
+                    self.vel.y = 0.0;
+                }
+            } else {
+                // Witch standard wall slide
+                is_wall_sliding = true;
+                self.wall_slide_timer += dt;
+                let initial_slide_speed = 35.0;
+                let slide_acceleration = 480.0;
+                let max_slide_speed = 440.0;
+                self.vel.y = (initial_slide_speed + self.wall_slide_timer * slide_acceleration)
+                    .min(max_slide_speed);
+            }
         } else {
             self.wall_slide_timer = 0.0;
         }
@@ -426,8 +526,18 @@ impl Player {
 
         if let Some(wall_dir) = eligible_wall_jump {
             let push_dir = if wall_dir == -1 { 1.0 } else { -1.0 };
-            self.vel.x = push_dir * 250.0;
-            self.vel.y = -500.0;
+            let jump_mult = if self.form == PlayerForm::Beast {
+                BEAST_JUMP_MULT
+            } else {
+                1.0
+            };
+            let speed_mult = if self.form == PlayerForm::Beast {
+                BEAST_SPEED_MULT
+            } else {
+                1.0
+            };
+            self.vel.x = push_dir * 250.0 * speed_mult;
+            self.vel.y = -500.0 * jump_mult;
             self.facing = push_dir;
             self.wall_jump_lock_timer = 0.08;
             self.wall_slide_timer = 0.0;
@@ -441,13 +551,28 @@ impl Player {
             && (self.grounded || self.coyote_timer > 0.0)
             && self.dash_timer <= 0.0
         {
-            let max_air_speed = 300.0;
+            let speed_mult = if self.form == PlayerForm::Beast {
+                BEAST_SPEED_MULT
+            } else {
+                1.0
+            };
+            let jump_mult = if self.form == PlayerForm::Beast {
+                BEAST_JUMP_MULT
+            } else {
+                1.0
+            };
+            let max_air_speed = 300.0 * speed_mult;
             // Bunnyhop chain timing
             let is_bhop_timing = (self.bhop_timer > 0.0 && self.is_bhopping)
                 || (self.auto_bhop && input.is_pressed(Key::Jump) && self.vel.x.abs() > 80.0);
 
             if is_bhop_timing {
-                let current_spd = self.vel.x.abs().max(self.bhop_velocity.abs()).max(250.0);
+                let current_spd = self
+                    .vel
+                    .x
+                    .abs()
+                    .max(self.bhop_velocity.abs())
+                    .max(250.0 * speed_mult);
                 let boosted_spd = (current_spd + 25.0).min(max_air_speed);
                 let dir = if move_x != 0.0 {
                     move_x.signum()
@@ -465,7 +590,7 @@ impl Player {
                 self.is_bhopping = false;
                 self.bhop_chain = 0;
             }
-            self.vel.y = -520.0;
+            self.vel.y = -520.0 * jump_mult;
             self.grounded = false;
             self.coyote_timer = 0.0;
             self.jump_buffer_timer = 0.0;
@@ -497,7 +622,8 @@ impl Player {
             dropping_down,
             solid_tiles,
             one_way_platforms,
-            hazard_tiles,
+            void_tiles,
+            spike_tiles,
         );
 
         if self.dead {

@@ -14,7 +14,7 @@ fn test_wall_jump_same_wall_limit() {
     input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Pressed);
 
     // 1. First jump off left wall succeeds (initial vertical impulse -500 px/s with gravity)
-    player.update(0.01, &input, &[], &[], &[], &mut []);
+    player.update(0.01, &input, &[], &[], &[], &[], &mut []);
     assert_eq!(player.jumps_count, 1);
     assert_eq!(player.last_wall_dir, Some(-1));
     assert_eq!(player.vel.x, 250.0);
@@ -30,7 +30,7 @@ fn test_wall_jump_same_wall_limit() {
     input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Pressed);
 
     // Advance simulation tick
-    player.update(0.01, &input, &[], &[], &[], &mut []);
+    player.update(0.01, &input, &[], &[], &[], &[], &mut []);
 
     // Second jump off the same wall must be blocked
     assert_eq!(player.jumps_count, 1);

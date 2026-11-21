@@ -14,7 +14,7 @@ fn test_auto_bhop_continuous_jump_buffer() {
     // Clear single-frame edge triggers so key is purely in 'held/pressed' state
     input.clear_frame_edges();
 
-    player.update(1.0 / 60.0, &input, &[], &[], &[], &mut []);
+    player.update(1.0 / 60.0, &input, &[], &[], &[], &[], &mut []);
 
     // Holding Space with auto-bhop enabled must refresh jump buffer to 0.16s
     assert_eq!(player.jump_buffer_timer, 0.16);
