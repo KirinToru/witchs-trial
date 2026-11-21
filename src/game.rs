@@ -339,8 +339,14 @@ impl Game {
             "Dynamic".to_string()
         };
 
+        let last_wall_str = match self.player.last_wall_dir {
+            Some(-1) => "L",
+            Some(1) => "R",
+            _ => "-",
+        };
+
         let hud_lines = format!(
-            "[DEBUG MONITOR - F3]\nFPS: {} ({:.1} ms) | STEP: {}\nBACKEND: {} | TIMESTEP: {}\nPOS: X: {:.1}, Y: {:.1}\nVEL: X: {:.1}, Y: {:.1} (SPD: {:.1})\nSTATE: {:?} | GRND: {} | FACE: {:.0}\nWALL: L:{} R:{} | SLIDE: {:.2}s\nDASH: {} | CD: {:.2}s\nMODE: {}\n[F4] CYCLE WINDOW MODE",
+            "[DEBUG MONITOR - F3]\nFPS: {} ({:.1} ms) | STEP: {}\nBACKEND: {} | TIMESTEP: {}\nPOS: X: {:.1}, Y: {:.1}\nVEL: X: {:.1}, Y: {:.1} (SPD: {:.1})\nSTATE: {:?} | GRND: {} | FACE: {:.0}\nWALL: L:{} R:{} (LAST:{}) | SLIDE: {:.2}s\nDASH: {} | CD: {:.2}s\nMODE: {}\n[F4] CYCLE WINDOW MODE",
             self.fps,
             self.frame_time_ms,
             step_label,
@@ -356,6 +362,7 @@ impl Game {
             self.player.facing,
             self.player.walled_left,
             self.player.walled_right,
+            last_wall_str,
             self.player.wall_slide_timer,
             dash_status,
             self.player.dash_cooldown,

@@ -25,6 +25,7 @@ pub struct Player {
     pub checkpoint_pos: Vec2,
     pub walled_left: bool,
     pub walled_right: bool,
+    pub last_wall_dir: Option<i8>,
     pub wall_slide_timer: f32,
     pub wall_jump_lock_timer: f32,
     pub dash_freeze_timer: f32,
@@ -64,6 +65,7 @@ impl Player {
             checkpoint_pos: spawn_pos,
             walled_left: false,
             walled_right: false,
+            last_wall_dir: None,
             wall_slide_timer: 0.0,
             wall_jump_lock_timer: 0.0,
             dash_freeze_timer: 0.0,
@@ -112,6 +114,7 @@ impl Player {
         self.dead = false;
         self.walled_left = false;
         self.walled_right = false;
+        self.last_wall_dir = None;
         self.wall_slide_timer = 0.0;
         self.wall_jump_lock_timer = 0.0;
         self.dash_freeze_timer = 0.0;
@@ -183,6 +186,8 @@ impl Player {
         if self.grounded {
             self.coyote_timer = 0.12;
             self.can_dash = true;
+            // Ground contact resets wall jump limit
+            self.last_wall_dir = None;
         } else if self.coyote_timer > 0.0 {
             self.coyote_timer -= dt;
         }
@@ -391,13 +396,36 @@ impl Player {
             self.wall_slide_timer = 0.0;
         }
 
-        // Wall jump execution
-        if self.jump_buffer_timer > 0.0
+        // Wall jump execution (limit 1 jump per wall, alternating allowed)
+        let can_jump_left = self.walled_left && self.last_wall_dir != Some(-1);
+        let can_jump_right = self.walled_right && self.last_wall_dir != Some(1);
+
+        // When touching both walls, prioritize the wall opposite to the last used one
+        let wall_jump_dir: Option<i8> = if can_jump_left && can_jump_right {
+            if self.last_wall_dir == Some(-1) {
+                Some(1)
+            } else {
+                Some(-1)
+            }
+        } else if can_jump_left {
+            Some(-1)
+        } else if can_jump_right {
+            Some(1)
+        } else {
+            None
+        };
+
+        let eligible_wall_jump = if self.jump_buffer_timer > 0.0
             && !self.grounded
-            && (self.walled_left || self.walled_right)
             && self.dash_timer <= 0.0
         {
-            let push_dir = if self.walled_left { 1.0 } else { -1.0 };
+            wall_jump_dir
+        } else {
+            None
+        };
+
+        if let Some(wall_dir) = eligible_wall_jump {
+            let push_dir = if wall_dir == -1 { 1.0 } else { -1.0 };
             self.vel.x = push_dir * 250.0;
             self.vel.y = -500.0;
             self.facing = push_dir;
@@ -407,6 +435,8 @@ impl Player {
             self.coyote_timer = 0.0;
             self.jumps_count += 1;
             self.is_bhopping = false;
+            // Record last used wall direction (-1 for left, 1 for right)
+            self.last_wall_dir = Some(wall_dir);
         } else if self.jump_buffer_timer > 0.0
             && (self.grounded || self.coyote_timer > 0.0)
             && self.dash_timer <= 0.0
@@ -484,6 +514,11 @@ impl Player {
                 self.is_bhopping = false;
                 self.bhop_velocity = 0.0;
             }
+        }
+
+        // Reset wall jump limit when on ground
+        if self.grounded {
+            self.last_wall_dir = None;
         }
 
         // Wall proximity probes

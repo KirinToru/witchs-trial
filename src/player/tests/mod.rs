@@ -10,3 +10,6 @@ mod test_auto_bhop_continuous_jump_buffer;
 mod test_dash_impulse_and_taper;
 mod test_one_tile_hazard_corridor_clearance;
 mod test_dash_substepping_tunneling_prevention;
+mod test_wall_jump_same_wall_limit;
+mod test_wall_jump_alternating_walls;
+mod test_wall_jump_ground_reset;
