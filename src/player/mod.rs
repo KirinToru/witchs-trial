@@ -52,6 +52,7 @@ pub struct Player {
     pub can_dash: bool,
     pub coyote_timer: f32,
     pub jump_buffer_timer: f32,
+    pub wall_jump_buffer_timer: f32,
     pub dash_buffer_timer: f32,
     pub jumps_count: u32,
     pub dashes_count: u32,
@@ -95,6 +96,7 @@ impl Player {
             can_dash: true,
             coyote_timer: 0.0,
             jump_buffer_timer: 0.0,
+            wall_jump_buffer_timer: 0.0,
             dash_buffer_timer: 0.0,
             jumps_count: 0,
             dashes_count: 0,
@@ -146,6 +148,7 @@ impl Player {
         self.can_dash = true;
         self.coyote_timer = 0.0;
         self.jump_buffer_timer = 0.0;
+        self.wall_jump_buffer_timer = 0.0;
         self.bhop_velocity = 0.0;
         self.bhop_timer = 0.0;
         self.is_bhopping = false;
@@ -222,11 +225,17 @@ impl Player {
             self.coyote_timer -= dt;
         }
 
-        // Jump buffer (renew while holding Space if auto-bhop is on)
-        if input.is_just_pressed(Key::Jump) || (self.auto_bhop && input.is_pressed(Key::Jump)) {
+        // Jump and wall-jump buffers (loaded exclusively on fresh press)
+        if input.is_just_pressed(Key::Jump) {
             self.jump_buffer_timer = 0.16;
-        } else if self.jump_buffer_timer > 0.0 {
-            self.jump_buffer_timer -= dt;
+            self.wall_jump_buffer_timer = 0.08;
+        } else {
+            if self.jump_buffer_timer > 0.0 {
+                self.jump_buffer_timer -= dt;
+            }
+            if self.wall_jump_buffer_timer > 0.0 {
+                self.wall_jump_buffer_timer -= dt;
+            }
         }
 
         // Dash buffer
@@ -515,7 +524,7 @@ impl Player {
             None
         };
 
-        let eligible_wall_jump = if self.jump_buffer_timer > 0.0
+        let eligible_wall_jump = if self.wall_jump_buffer_timer > 0.0
             && !self.grounded
             && self.dash_timer <= 0.0
         {
@@ -542,13 +551,14 @@ impl Player {
             self.wall_jump_lock_timer = 0.08;
             self.wall_slide_timer = 0.0;
             self.jump_buffer_timer = 0.0;
+            self.wall_jump_buffer_timer = 0.0;
             self.coyote_timer = 0.0;
             self.jumps_count += 1;
             self.is_bhopping = false;
             // Record last used wall direction (-1 for left, 1 for right)
             self.last_wall_dir = Some(wall_dir);
-        } else if self.jump_buffer_timer > 0.0
-            && (self.grounded || self.coyote_timer > 0.0)
+        } else if ((self.jump_buffer_timer > 0.0 && (self.grounded || self.coyote_timer > 0.0))
+            || (self.grounded && self.auto_bhop && input.is_pressed(Key::Jump)))
             && self.dash_timer <= 0.0
         {
             let speed_mult = if self.form == PlayerForm::Beast {
@@ -594,6 +604,7 @@ impl Player {
             self.grounded = false;
             self.coyote_timer = 0.0;
             self.jump_buffer_timer = 0.0;
+            self.wall_jump_buffer_timer = 0.0;
             self.bhop_timer = 0.0;
             self.jumps_count += 1;
         }

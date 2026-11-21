@@ -18,3 +18,5 @@ mod test_beast_physics_multipliers;
 mod test_beast_wall_stick_and_slide;
 mod test_beast_spike_hit_reversion_and_iframes;
 mod test_void_instant_death_in_beast_mode;
+mod test_auto_bhop_no_accidental_wall_jump;
+mod test_wall_jump_short_buffer_cleared_on_ground_jump;

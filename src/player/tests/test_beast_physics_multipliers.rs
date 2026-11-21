@@ -28,6 +28,7 @@ fn test_beast_physics_multipliers() {
     player.walled_left = true;
     player.last_wall_dir = None;
     input.clear_frame_edges();
+    input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Released);
     input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Pressed);
     player.update(0.01, &input, &[], &[], &[], &[], &mut []);
     assert_eq!(player.vel.y, -500.0 * BEAST_JUMP_MULT + 12.0);

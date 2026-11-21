@@ -27,6 +27,7 @@ fn test_wall_jump_alternating_walls() {
     player.walled_left = false;
     player.walled_right = true;
     input.clear_frame_edges();
+    input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Released);
     input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Pressed);
     player.update(0.01, &input, &[], &[], &[], &[], &mut []);
 
@@ -40,6 +41,7 @@ fn test_wall_jump_alternating_walls() {
     player.walled_left = true;
     player.walled_right = false;
     input.clear_frame_edges();
+    input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Released);
     input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Pressed);
     player.update(0.01, &input, &[], &[], &[], &[], &mut []);
 
