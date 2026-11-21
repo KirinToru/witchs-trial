@@ -7,7 +7,7 @@ Witch's Trial is a 2D retro-style precision platformer built from scratch in Rus
 The game emphasizes tight, responsive platforming kinematics, deterministic physics simulation, and modern multi-backend graphics:
 
 - Pure 2D platformer kinematics featuring variable jump heights, coyote time, jump buffering, wall sliding, air dashing, and bunny hop momentum chaining.
-- Continuous collision detection using Swept AABB and merged horizontal collider generation to prevent ghost vertex snagging.
+- Sub-stepped discrete AABB collision detection and merged horizontal collider generation to prevent ghost vertex snagging.
 - Custom rendering pipeline built on wgpu, supporting Vulkan, DirectX 12, Metal, and OpenGL.
 - Fixed-timestep physics simulation with configurable tick rates (30 Hz to 300 Hz) and sub-frame interpolation.
 - Full keyboard-driven navigation across Main, Map Select, Settings, Pause, and Level Complete screens.

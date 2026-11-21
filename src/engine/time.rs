@@ -47,7 +47,6 @@ impl TimeAccumulator {
     }
 
     //------------[Interpolation alpha factor]-------------------
-    #[allow(dead_code)]
     pub fn alpha(&self) -> f32 {
         (self.accumulator / self.fixed_dt).clamp(0.0, 1.0)
     }

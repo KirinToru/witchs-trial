@@ -32,6 +32,7 @@ impl AABB {
     }
 
     //------------[Test AABB proximity with tolerance]-------------------
+    // Reserved for contact and proximity tests (e.g. pushable blocks interaction)
     #[allow(dead_code)]
     pub fn touches(&self, other: &AABB, tolerance: f32) -> bool {
         self.min.x <= other.max.x + tolerance

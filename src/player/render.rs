@@ -1,22 +1,10 @@
 use glam::Vec2;
-use crate::engine::{Texture, WgpuRenderer};
+use crate::engine::WgpuRenderer;
 use super::{Player, PlayerState};
 
 impl Player {
-    //------------[Reload player textures]-------------------
-    #[allow(dead_code)]
-    pub fn reload_textures(&mut self, renderer: &WgpuRenderer) -> Result<(), String> {
-        self.spritesheet = Texture::from_file(
-            &renderer.device,
-            &renderer.queue,
-            "assets/player/spritesheet.png",
-            &renderer.texture_bind_group_layout,
-        )?;
-        Ok(())
-    }
-
-    //------------[Render player sprite]-------------------
-    pub fn render(&self, renderer: &mut WgpuRenderer) {
+    //------------[Render player sprite with sub-frame interpolation]-------------------
+    pub fn render(&self, renderer: &mut WgpuRenderer, alpha: f32) {
         let (row, frame_count, _) = self.state.anim_params();
 
         let current_col = (self.anim_frame % frame_count) as f32;
@@ -43,8 +31,11 @@ impl Player {
             std::mem::swap(&mut u0, &mut u1);
         }
 
+        // Interpolate player position between previous and current physics tick
+        let interp_pos = self.prev_pos.lerp(self.pos, alpha);
+
         // Center 36x36 sprite over 18x26 collider
-        let render_pos = self.pos + Vec2::new(-9.0, -10.0);
+        let render_pos = interp_pos + Vec2::new(-9.0, -10.0);
         let render_size = Vec2::new(36.0, 36.0);
 
         // State tint
@@ -55,15 +46,17 @@ impl Player {
             _ => [1.0, 1.0, 1.0, 1.0],
         };
 
-        renderer.draw_texture_rect(
-            render_pos,
-            render_size,
-            Vec2::new(u0, v0),
-            Vec2::new(u1, v1),
-            self.spritesheet.id,
-            &self.spritesheet.bind_group,
-            tint,
-        );
+        if let Some(spritesheet) = &self.spritesheet {
+            renderer.draw_texture_rect(
+                render_pos,
+                render_size,
+                Vec2::new(u0, v0),
+                Vec2::new(u1, v1),
+                spritesheet.id,
+                &spritesheet.bind_group,
+                tint,
+            );
+        }
     }
 }
 

@@ -10,6 +10,7 @@ pub struct Game {
     pub player: Player,
     pub bg_texture: Texture,
     pub camera_pos: Vec2,
+    pub prev_camera_pos: Vec2,
     pub viewport_size: Vec2,
     pub fade_alpha: f32,
     pub fading_out: bool,
@@ -49,6 +50,7 @@ impl Game {
             player,
             bg_texture,
             camera_pos: Vec2::ZERO,
+            prev_camera_pos: Vec2::ZERO,
             viewport_size,
             fade_alpha: 0.0,
             fading_out: false,
@@ -77,21 +79,7 @@ impl Game {
         let target = self.player.pos + self.player.size * 0.5 - self.viewport_size * 0.5;
         let max_cam = (Vec2::new(self.map.width as f32, self.map.height as f32) * self.map.tile_size - self.viewport_size).max(Vec2::ZERO);
         self.camera_pos = target.clamp(Vec2::ZERO, max_cam);
-    }
-
-    //------------[Reload graphics]-------------------
-    #[allow(dead_code)]
-    pub fn reload_graphics(&mut self, renderer: &WgpuRenderer) -> Result<(), String> {
-        self.bg_texture = Texture::from_file(
-            &renderer.device,
-            &renderer.queue,
-            "assets/backgrounds/bg.png",
-            &renderer.texture_bind_group_layout,
-        )?;
-        self.map.reload_textures(renderer)?;
-        self.player.reload_textures(renderer)?;
-        self.active_backend_name = renderer.active_backend_name.clone();
-        Ok(())
+        self.prev_camera_pos = self.camera_pos;
     }
 
     //------------[Full level restart]-------------------
@@ -207,6 +195,7 @@ impl Game {
         }
 
         // Smooth camera follow
+        self.prev_camera_pos = self.camera_pos;
         let target = self.player.pos + self.player.size * 0.5 - self.viewport_size * 0.5;
         let max_cam = (Vec2::new(self.map.width as f32, self.map.height as f32) * self.map.tile_size - self.viewport_size).max(Vec2::ZERO);
         let clamped = target.clamp(Vec2::ZERO, max_cam);
@@ -215,8 +204,9 @@ impl Game {
     }
 
     //------------[Render game frame]-------------------
-    pub fn render(&self, renderer: &mut WgpuRenderer) {
-        renderer.set_camera(self.camera_pos, self.viewport_size);
+    pub fn render(&self, renderer: &mut WgpuRenderer, alpha: f32) {
+        let interp_camera = self.prev_camera_pos.lerp(self.camera_pos, alpha);
+        renderer.set_camera(interp_camera, self.viewport_size);
 
         // Background tile layer
         let bg_tile_size = 64.0;
@@ -224,7 +214,7 @@ impl Game {
         let uv_max_y = self.viewport_size.y / bg_tile_size;
 
         renderer.draw_texture_rect(
-            self.camera_pos,
+            interp_camera,
             self.viewport_size,
             Vec2::ZERO,
             Vec2::new(uv_max_x, uv_max_y),
@@ -234,20 +224,20 @@ impl Game {
         );
 
         // Map geometry (ts_main hidden unless debug is on)
-        self.map.render(renderer, self.camera_pos, self.viewport_size, self.debug_mode);
+        self.map.render(renderer, interp_camera, self.viewport_size, self.debug_mode);
 
         // Player sprite
-        self.player.render(renderer);
+        self.player.render(renderer, alpha);
 
         // Debug overlays
         if self.debug_mode {
-            self.render_debug_overlay(renderer);
+            self.render_debug_overlay(renderer, interp_camera, alpha);
         }
 
         // Restart fade overlay
         if self.fade_alpha > 0.005 {
             renderer.draw_quad(
-                self.camera_pos,
+                interp_camera,
                 self.viewport_size,
                 [0.0, 0.0, 0.0, self.fade_alpha],
             );
@@ -255,9 +245,9 @@ impl Game {
     }
 
     //------------[Render debug overlays and diagnostic HUD]-------------------
-    fn render_debug_overlay(&self, renderer: &mut WgpuRenderer) {
+    fn render_debug_overlay(&self, renderer: &mut WgpuRenderer, interp_camera: Vec2, alpha: f32) {
         let view_box = crate::physics::AABB::from_pos_size(
-            self.camera_pos - Vec2::splat(64.0),
+            interp_camera - Vec2::splat(64.0),
             self.viewport_size + Vec2::splat(128.0),
         );
 
@@ -297,8 +287,11 @@ impl Game {
             }
         }
 
+        // Interpolate player position for debug bounding boxes
+        let interp_player_pos = self.player.prev_pos.lerp(self.player.pos, alpha);
+
         // Player physics box (green)
-        let p_box = self.player.aabb();
+        let p_box = crate::physics::AABB::from_pos_size(interp_player_pos, self.player.size);
         renderer.draw_debug_box(
             p_box.min,
             p_box.max - p_box.min,
@@ -307,7 +300,11 @@ impl Game {
         );
 
         // Player hurtbox (orange)
-        let h_box = self.player.hurtbox();
+        let inset = Vec2::new(2.0, 2.0);
+        let h_box = crate::physics::AABB::new(
+            interp_player_pos + inset,
+            interp_player_pos + self.player.size - inset,
+        );
         renderer.draw_debug_box(
             h_box.min,
             h_box.max - h_box.min,
@@ -316,8 +313,8 @@ impl Game {
         );
 
         // Wall probes
-        let left_probe = Vec2::new(self.player.pos.x - 2.0, self.player.pos.y + 4.0);
-        let right_probe = Vec2::new(self.player.pos.x + self.player.size.x, self.player.pos.y + 4.0);
+        let left_probe = Vec2::new(interp_player_pos.x - 2.0, interp_player_pos.y + 4.0);
+        let right_probe = Vec2::new(interp_player_pos.x + self.player.size.x, interp_player_pos.y + 4.0);
         let probe_size = Vec2::new(2.0, self.player.size.y - 8.0);
         let l_col = if self.player.walled_left { [1.0, 0.85, 0.0, 0.95] } else { [0.3, 0.3, 0.3, 0.4] };
         let r_col = if self.player.walled_right { [1.0, 0.85, 0.0, 0.95] } else { [0.3, 0.3, 0.3, 0.4] };
@@ -325,7 +322,7 @@ impl Game {
         renderer.draw_quad(right_probe, probe_size, r_col);
 
         // Diagnostic HUD panel
-        let panel_pos = self.camera_pos + Vec2::new(6.0, 6.0);
+        let panel_pos = interp_camera + Vec2::new(6.0, 6.0);
         let panel_size = Vec2::new(315.0, 158.0);
         renderer.draw_debug_box(
             panel_pos,

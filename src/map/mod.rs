@@ -85,8 +85,8 @@ impl TmxMap {
         let layers = extract_all_layers(&content);
 
         let mut visuals = Vec::new();
-        let mut solid_colliders = Vec::new();
-        let mut one_way_platforms = Vec::new();
+        let mut solid_tile_coords = Vec::new();
+        let mut one_way_tile_coords = Vec::new();
         let mut hazard_colliders = Vec::new();
         let mut interactives = Vec::new();
         let mut initial_spawn_pos = Vec2::new(100.0, 100.0);
@@ -99,8 +99,10 @@ impl TmxMap {
                     continue;
                 }
                 let (gid, rot_deg, scale) = decode_tile_gid(raw);
-                let x = (idx as u32 % width) as f32 * tile_size;
-                let y = (idx as u32 / width) as f32 * tile_size;
+                let col = idx as u32 % width;
+                let row = idx as u32 / width;
+                let x = col as f32 * tile_size;
+                let y = row as f32 * tile_size;
                 let pos = Vec2::new(x, y);
                 let size = Vec2::new(tile_size, tile_size);
 
@@ -152,10 +154,10 @@ impl TmxMap {
                                 });
                             }
                             8 => {
-                                solid_colliders.push(AABB::from_pos_size(pos, size));
+                                solid_tile_coords.push((col, row));
                             }
                             9 => {
-                                one_way_platforms.push(AABB::from_pos_size(pos, size));
+                                one_way_tile_coords.push((col, row));
                             }
                             12 => {
                                 let void_box = AABB::from_pos_size(
@@ -174,6 +176,10 @@ impl TmxMap {
             }
         }
 
+        // Merge horizontal colliders in the same row
+        let solid_colliders = merge_horizontal_colliders(&solid_tile_coords, tile_size);
+        let one_way_platforms = merge_horizontal_colliders(&one_way_tile_coords, tile_size);
+
         // Fallback spawn check in object groups
         if interactives.iter().all(|i| i.kind != InteractiveKind::SpawnPoint) {
             if let Some(obj_spawn) = extract_object_spawn(&content) {
@@ -181,12 +187,12 @@ impl TmxMap {
             }
         }
 
-        // Fallback visuals from colliders if visual layer was empty
-        if visuals.is_empty() && !solid_colliders.is_empty() {
+        // Fallback visuals from individual tile coordinates if visual layer was empty
+        if visuals.is_empty() && !solid_tile_coords.is_empty() {
             let (u0, u1, v0, v1) = calc_tile_uv(8, 8.0, 8.0);
-            for col in &solid_colliders {
+            for &(col, row) in &solid_tile_coords {
                 visuals.push(TileVisual {
-                    pos: col.min,
+                    pos: Vec2::new(col as f32 * tile_size, row as f32 * tile_size),
                     rot_deg: 0.0,
                     scale: Vec2::ONE,
                     uv_min: Vec2::new(u0, v0),
@@ -233,30 +239,6 @@ impl TmxMap {
         })
     }
 
-    //------------[Reload tileset textures]-------------------
-    #[allow(dead_code)]
-    pub fn reload_textures(&mut self, renderer: &WgpuRenderer) -> Result<(), String> {
-        self.bricks_texture = Texture::from_file(
-            &renderer.device,
-            &renderer.queue,
-            "assets/tilesets/ts_bricks.png",
-            &renderer.texture_bind_group_layout,
-        )?;
-        self.prototype_texture = Texture::from_file(
-            &renderer.device,
-            &renderer.queue,
-            "assets/tilesets/ts_prototype.png",
-            &renderer.texture_bind_group_layout,
-        )?;
-        self.main_texture = Texture::from_file(
-            &renderer.device,
-            &renderer.queue,
-            "assets/tilesets/ts_main.png",
-            &renderer.texture_bind_group_layout,
-        )?;
-        Ok(())
-    }
-
     //------------[Render visible map tiles]-------------------
     pub fn render(&self, renderer: &mut WgpuRenderer, cam_pos: Vec2, viewport: Vec2, show_debug_tiles: bool) {
         let view_box = AABB::from_pos_size(
@@ -292,6 +274,48 @@ impl TmxMap {
             }
         }
     }
+}
+
+//------------[Merge contiguous horizontal tile colliders into single AABBs]-------------------
+// Scans sorted tile coordinates and merges horizontally adjacent tiles in the same row
+pub fn merge_horizontal_colliders(tiles: &[(u32, u32)], tile_size: f32) -> Vec<AABB> {
+    if tiles.is_empty() {
+        return Vec::new();
+    }
+    let mut sorted = tiles.to_vec();
+    // Sort by row first, then column
+    sorted.sort_unstable_by_key(|&(col, row)| (row, col));
+    sorted.dedup();
+
+    let mut merged = Vec::new();
+    let mut current_row = sorted[0].1;
+    let mut start_col = sorted[0].0;
+    let mut end_col = sorted[0].0;
+
+    for &(col, row) in &sorted[1..] {
+        if row == current_row && col == end_col + 1 {
+            // Contiguous tile in the same row extends the current collider
+            end_col = col;
+        } else {
+            // Gap or row boundary reached: finish the current collider span
+            let x = start_col as f32 * tile_size;
+            let y = current_row as f32 * tile_size;
+            let width = (end_col - start_col + 1) as f32 * tile_size;
+            merged.push(AABB::from_pos_size(Vec2::new(x, y), Vec2::new(width, tile_size)));
+
+            current_row = row;
+            start_col = col;
+            end_col = col;
+        }
+    }
+
+    // Finish final span
+    let x = start_col as f32 * tile_size;
+    let y = current_row as f32 * tile_size;
+    let width = (end_col - start_col + 1) as f32 * tile_size;
+    merged.push(AABB::from_pos_size(Vec2::new(x, y), Vec2::new(width, tile_size)));
+
+    merged
 }
 
 //------------[Calculate rotated spike AABB]-------------------

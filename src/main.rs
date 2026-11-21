@@ -6,7 +6,7 @@
 //!
 //! - [`engine`]: 2D hardware renderer, input state bitmask, timers, textures, and debug fonts.
 //! - [`game`]: Orchestrator managing map state, player entity, camera tracking, and HUD.
-//! - [`player`]: Kinematic controller, FSM states, AABB/SAT collision resolution, and animation.
+//! - [`player`]: Kinematic controller, FSM states, sub-stepped AABB collision resolution, and animation.
 //! - [`map`]: Tiled TMX XML parser, dynamic tilesets, UV coordinates, and merged colliders.
 //! - [`menu`]: Keyboard-driven UI screens, settings persistence, and pause overlay.
 //! - [`physics`]: Axis-Aligned Bounding Box (AABB) intersection and proximity detection.
@@ -237,6 +237,12 @@ impl ApplicationHandler for App {
                 if let (Some(renderer), Some(game)) = (&mut self.renderer, &self.game) {
                     renderer.begin_frame();
 
+                    // In fixed timestep mode use accumulator alpha, in dynamic mode use 1.0
+                    let alpha = match self.menu.settings.timestep_mode {
+                        crate::menu::TimestepMode::Dynamic => 1.0,
+                        _ => self.time.alpha(),
+                    };
+
                     match self.state {
                         AppState::Menu => {
                             let is_paused_view = self.menu.screen == crate::menu::MenuScreen::Pause
@@ -244,13 +250,13 @@ impl ApplicationHandler for App {
                                     && self.menu.settings_return_screen == crate::menu::MenuScreen::Pause);
 
                             if is_paused_view {
-                                game.render(renderer);
+                                game.render(renderer, alpha);
                             }
                             renderer.set_camera(glam::Vec2::ZERO, game.viewport_size);
                             self.menu.render(renderer, game.viewport_size);
                         }
                         AppState::Playing => {
-                            game.render(renderer);
+                            game.render(renderer, alpha);
                         }
                     }
 

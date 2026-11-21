@@ -9,4 +9,4 @@ mod test_air_speed_limit;
 mod test_auto_bhop_continuous_jump_buffer;
 mod test_dash_impulse_and_taper;
 mod test_one_tile_hazard_corridor_clearance;
-
+mod test_dash_substepping_tunneling_prevention;

@@ -1,5 +1,6 @@
 mod test_decode_tile_rotation_flags;
-mod test_extract_layer_data_fallback;
 mod test_calculate_spike_aabb_rotations;
 mod test_dynamic_tileset_resolution;
 mod test_extract_all_layers;
+mod test_merge_horizontal_colliders_contiguous;
+mod test_merge_horizontal_colliders_gaps_and_rows;

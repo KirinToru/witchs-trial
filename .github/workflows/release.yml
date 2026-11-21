@@ -108,7 +108,7 @@ jobs:
             - Linux / macOS: `sha256sum -c <checksum_file>`
 
             ## Architecture Overview
-            - Pure platformer precision physics with Swept AABB Continuous Collision Detection.
+            - Pure platformer precision physics with sub-stepped AABB collision detection.
             - Horizontal tile collider merging eliminating ghost-vertex snagging.
             - Modular Player Finite State Machine (Idle, Walk, Jump, Fall, WallSlide, DashFreeze, Dash).
             - Multi-backend rendering via wgpu (Vulkan, DirectX 12, Metal, OpenGL).

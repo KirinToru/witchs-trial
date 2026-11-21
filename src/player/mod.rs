@@ -15,6 +15,7 @@ pub use state::PlayerState;
 
 pub struct Player {
     pub pos: Vec2,
+    pub prev_pos: Vec2,
     pub vel: Vec2,
     pub size: Vec2,
     pub facing: f32,
@@ -45,21 +46,15 @@ pub struct Player {
     pub status_timer: f32,
     pub(crate) anim_timer: f32,
     pub(crate) anim_frame: usize,
-    pub spritesheet: Texture,
+    pub spritesheet: Option<Texture>,
 }
 
 impl Player {
-    //------------[Create player entity]-------------------
-    pub fn new(spawn_pos: Vec2, renderer: &WgpuRenderer) -> Result<Self, String> {
-        let spritesheet = Texture::from_file(
-            &renderer.device,
-            &renderer.queue,
-            "assets/player/spritesheet.png",
-            &renderer.texture_bind_group_layout,
-        )?;
-
-        Ok(Self {
+    //------------[Create headless player entity without GPU resources]-------------------
+    pub fn new_headless(spawn_pos: Vec2) -> Self {
+        Self {
             pos: spawn_pos,
+            prev_pos: spawn_pos,
             vel: Vec2::ZERO,
             size: Vec2::new(18.0, 26.0),
             facing: 1.0,
@@ -90,13 +85,27 @@ impl Player {
             status_timer: 0.0,
             anim_timer: 0.0,
             anim_frame: 0,
-            spritesheet,
-        })
+            spritesheet: None,
+        }
+    }
+
+    //------------[Create player entity with GPU textures]-------------------
+    pub fn new(spawn_pos: Vec2, renderer: &WgpuRenderer) -> Result<Self, String> {
+        let mut player = Self::new_headless(spawn_pos);
+        let spritesheet = Texture::from_file(
+            &renderer.device,
+            &renderer.queue,
+            "assets/player/spritesheet.png",
+            &renderer.texture_bind_group_layout,
+        )?;
+        player.spritesheet = Some(spritesheet);
+        Ok(player)
     }
 
     //------------[Reset player state and position]-------------------
     pub fn reset(&mut self, reset_pos: Vec2) {
         self.pos = reset_pos;
+        self.prev_pos = reset_pos;
         self.vel = Vec2::ZERO;
         self.grounded = false;
         self.state = PlayerState::Idle;
@@ -142,6 +151,9 @@ impl Player {
         if self.dead {
             return;
         }
+
+        // Store previous position before physics tick for sub-frame interpolation
+        self.prev_pos = self.pos;
 
         let was_grounded = self.grounded;
 
@@ -448,24 +460,19 @@ impl Player {
             self.vel.y = (self.vel.y + gravity * dt).min(720.0);
         }
 
-        // Previous position for one-way platform check
-        let prev_pos = self.pos;
+        // Movement and collision with adaptive sub-stepping
+        let dropping_down = input.is_pressed(Key::Down);
+        self.move_and_collide(
+            dt,
+            dropping_down,
+            solid_tiles,
+            one_way_platforms,
+            hazard_tiles,
+        );
 
-        // Pre-move hazard overlap check
-        if self.check_hazard_collision(hazard_tiles) {
-            self.dead = true;
+        if self.dead {
             return;
         }
-
-        // Horizontal movement & collision
-        self.resolve_horizontal_movement(dt, solid_tiles);
-
-        // Vertical movement & collision
-        self.resolve_vertical_movement(dt, solid_tiles);
-
-        // One-way platforms (pass through from below, drop with S)
-        let dropping_down = input.is_pressed(Key::Down);
-        self.resolve_one_way_platforms(prev_pos, dropping_down, one_way_platforms);
 
         // Landing event
         let just_landed = !was_grounded && self.grounded;
@@ -477,11 +484,6 @@ impl Player {
                 self.is_bhopping = false;
                 self.bhop_velocity = 0.0;
             }
-        }
-
-        // Post-move hazard check
-        if self.check_hazard_collision(hazard_tiles) {
-            self.dead = true;
         }
 
         // Wall proximity probes

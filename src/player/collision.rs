@@ -9,6 +9,48 @@ impl Player {
         hazard_tiles.iter().any(|h| box_hurt.overlaps(h))
     }
 
+    //------------[Execute sub-stepped movement and collision]-------------------
+    // Splits movement into safe sub-steps if velocity is high to prevent tunneling
+    pub fn move_and_collide(
+        &mut self,
+        dt: f32,
+        dropping_down: bool,
+        solid_tiles: &[AABB],
+        one_way_platforms: &[AABB],
+        hazard_tiles: &[AABB],
+    ) {
+        // Calculate maximum axis displacement
+        let max_displacement = (self.vel.x.abs() * dt).max(self.vel.y.abs() * dt);
+        // Safe threshold is 8.0 pixels per sub-step
+        let steps = ((max_displacement / 8.0).ceil() as usize).max(1);
+        let sub_dt = dt / steps as f32;
+
+        for _ in 0..steps {
+            let step_prev_pos = self.pos;
+
+            // Check hazard before sub-step move
+            if self.check_hazard_collision(hazard_tiles) {
+                self.dead = true;
+                break;
+            }
+
+            // Move and resolve along horizontal axis
+            self.resolve_horizontal_movement(sub_dt, solid_tiles);
+
+            // Move and resolve along vertical axis
+            self.resolve_vertical_movement(sub_dt, solid_tiles);
+
+            // Resolve one-way platforms using start position of this sub-step
+            self.resolve_one_way_platforms(step_prev_pos, dropping_down, one_way_platforms);
+
+            // Check hazard after sub-step move
+            if self.check_hazard_collision(hazard_tiles) {
+                self.dead = true;
+                break;
+            }
+        }
+    }
+
     //------------[Resolve horizontal collision]-------------------
     pub fn resolve_horizontal_movement(&mut self, dt: f32, solid_tiles: &[AABB]) {
         if self.vel.x == 0.0 {

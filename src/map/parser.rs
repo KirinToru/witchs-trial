@@ -156,17 +156,6 @@ pub fn extract_all_layers(xml: &str) -> Vec<(String, String)> {
     layers
 }
 
-//------------[Extract CSV data by layer name]-------------------
-#[allow(dead_code)]
-pub(crate) fn extract_layer_data(xml: &str, layer_name: &str) -> Option<String> {
-    let search = format!("name=\"{layer_name}\"");
-    let layer_start = xml.find(&search)?;
-    let data_start = xml[layer_start..].find("<data")? + layer_start;
-    let data_open = xml[data_start..].find('>')? + data_start + 1;
-    let data_close = xml[data_open..].find("</data>")? + data_open;
-    Some(xml[data_open..data_close].to_string())
-}
-
 //------------[Extract spawn position from object groups]-------------------
 pub fn extract_object_spawn(xml: &str) -> Option<Vec2> {
     let mut cursor = 0;

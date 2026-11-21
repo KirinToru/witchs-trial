@@ -1,14 +1,19 @@
-//------------[Verify Wall Jump Lock Cancellation when Steering Back Into Wall]-------------------
+use glam::Vec2;
+use winit::keyboard::{KeyCode, PhysicalKey};
+use crate::engine::InputState;
+use crate::player::Player;
+
+//------------[Verify Wall Jump Lock Cancellation When Steering Back Into Wall]-------------------
 #[test]
 fn test_wall_jump_lock_cancellation() {
-    let mut lock_timer = 0.15;
-    let walled_left = true;
-    let move_x = -1.0;
+    let mut player = Player::new_headless(Vec2::new(100.0, 100.0));
+    player.wall_jump_lock_timer = 0.08;
+    player.vel.x = 250.0; // Moving right after wall jump
 
-    if move_x != 0.0 && (walled_left && move_x < 0.0) {
-        lock_timer = 0.0;
-    }
+    let mut input = InputState::new();
+    // Steering left (opposite direction to velocity) cancels the lock timer immediately
+    input.on_key_event(PhysicalKey::Code(KeyCode::KeyA), winit::event::ElementState::Pressed);
 
-    assert_eq!(lock_timer, 0.0);
+    player.update(0.01, &input, &[], &[], &[], &mut []);
+    assert_eq!(player.wall_jump_lock_timer, 0.0);
 }
-
