@@ -39,9 +39,9 @@ fn test_box_dash_impulse_and_slide() {
     normal_box.update_step(dt, &floor, &[], &[], &[], &[], &[], 500.0);
     ice_box.update_step(dt, &floor, &[], &ice, &[], &[], &[], 500.0);
 
-    // Normal friction reduces speed by BOX_GROUND_FRICTION (900 * 0.1 = 90 px/s)
+    // Normal friction reduces speed by BOX_GROUND_FRICTION (500 * 0.1 = 50 px/s)
     let expected_normal_speed = 300.0 - BOX_GROUND_FRICTION * dt;
-    // Ice friction reduces speed by BOX_ICE_FRICTION (120 * 0.1 = 12 px/s)
+    // Ice friction reduces speed by BOX_ICE_FRICTION (110 * 0.1 = 11 px/s)
     let expected_ice_speed = 300.0 - BOX_ICE_FRICTION * dt;
 
     assert!((normal_box.vel.x - expected_normal_speed).abs() < 1e-3);

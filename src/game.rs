@@ -248,8 +248,10 @@ impl Game {
     //------------[Render game frame]-------------------
     pub fn render(&self, renderer: &mut WgpuRenderer, alpha: f32) {
         self.render_world(renderer, alpha);
-        renderer.begin_ui_phase();
-        self.render_ui(renderer, alpha);
+        if self.debug_mode {
+            renderer.begin_ui_phase();
+            self.render_ui(renderer, alpha);
+        }
     }
 
     //------------[Render world layer subject to voxel post-processing]-------------------
@@ -295,24 +297,25 @@ impl Game {
 
         // Player sprite
         self.player.render(renderer, alpha);
-    }
 
-    //------------[Render UI overlays and diagnostic HUD without voxel post-processing]-------------------
-    pub fn render_ui(&self, renderer: &mut WgpuRenderer, alpha: f32) {
-        let interp_camera = self.prev_camera_pos.lerp(self.camera_pos, alpha);
-
-        // Debug overlays
-        if self.debug_mode {
-            self.render_debug_overlay(renderer, interp_camera, alpha);
-        }
-
-        // Restart fade overlay
+        // Restart fade overlay rendered in world phase to apply voxel post-processing
         if self.fade_alpha > 0.005 {
             renderer.draw_quad(
                 interp_camera,
                 self.viewport_size,
                 [0.0, 0.0, 0.0, self.fade_alpha],
             );
+        }
+    }
+
+    //------------[Render UI overlays and diagnostic HUD without voxel post-processing]-------------------
+    pub fn render_ui(&self, renderer: &mut WgpuRenderer, alpha: f32) {
+        let interp_camera = self.prev_camera_pos.lerp(self.camera_pos, alpha);
+        renderer.set_camera(interp_camera, self.viewport_size);
+
+        // Debug overlays
+        if self.debug_mode {
+            self.render_debug_overlay(renderer, interp_camera, alpha);
         }
     }
 

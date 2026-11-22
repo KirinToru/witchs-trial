@@ -157,23 +157,9 @@ impl Player {
             None => return,
         };
 
-        // Determine interaction direction
-        let dir = if self.dash_timer > 0.0 {
-            self.dash_dir.signum()
-        } else if self.vel.x != 0.0 {
-            self.vel.x.signum()
-        } else {
-            let crate_center_x = crates[hit_idx].pos.x + crates[hit_idx].size.x * 0.5;
-            let player_center_x = self.pos.x + self.size.x * 0.5;
-            if player_center_x < crate_center_x {
-                -1.0
-            } else {
-                1.0
-            }
-        };
-
         // 1. Dash impact: apply immediate impulse to crate, stop player before penetrating
         if self.dash_timer > 0.0 {
+            let dir = self.dash_dir.signum();
             let impulse = if self.form == PlayerForm::Beast {
                 BOX_DASH_IMPULSE_BEAST
             } else {
@@ -191,104 +177,128 @@ impl Player {
         }
 
         // 2. Normal pushing (chain pushing - Variant B)
-        if self.vel.x != 0.0 {
-            // Build chain of adjacent crates in push direction
-            let mut chain = vec![hit_idx];
-            let mut current = hit_idx;
-            loop {
-                let mut next_crate = None;
-                let curr_pos = crates[current].pos;
-                let curr_size = crates[current].size;
+        let crate_center_x = crates[hit_idx].pos.x + crates[hit_idx].size.x * 0.5;
+        let player_center_x = self.pos.x + self.size.x * 0.5;
+        let pushing_into_crate = (self.vel.x > 0.0 && player_center_x < crate_center_x)
+            || (self.vel.x < 0.0 && player_center_x > crate_center_x);
 
-                for (j, other) in crates.iter().enumerate() {
-                    if !other.active || chain.contains(&j) {
-                        continue;
+        if pushing_into_crate {
+            let dir = self.vel.x.signum();
+
+            // Calculate actual penetration overlap to avoid double movement
+            let overlap = if dir > 0.0 {
+                (self.pos.x + self.size.x) - crates[hit_idx].pos.x
+            } else {
+                (crates[hit_idx].pos.x + crates[hit_idx].size.x) - self.pos.x
+            };
+
+            if overlap > 0.0 {
+                // Build chain of adjacent crates in push direction
+                let mut chain = vec![hit_idx];
+                let mut current = hit_idx;
+                loop {
+                    let mut next_crate = None;
+                    let curr_pos = crates[current].pos;
+                    let curr_size = crates[current].size;
+
+                    for (j, other) in crates.iter().enumerate() {
+                        if !other.active || chain.contains(&j) {
+                            continue;
+                        }
+                        let y_match = (other.pos.y - curr_pos.y).abs() < 24.0;
+                        if !y_match {
+                            continue;
+                        }
+                        if dir > 0.0 {
+                            let x_gap = other.pos.x - (curr_pos.x + curr_size.x);
+                            if (-1.0..=2.0).contains(&x_gap) {
+                                next_crate = Some(j);
+                                break;
+                            }
+                        } else {
+                            let x_gap = curr_pos.x - (other.pos.x + other.size.x);
+                            if (-1.0..=2.0).contains(&x_gap) {
+                                next_crate = Some(j);
+                                break;
+                            }
+                        }
                     }
-                    let y_match = (other.pos.y - curr_pos.y).abs() < 24.0;
+
+                    if let Some(nxt) = next_crate {
+                        chain.push(nxt);
+                        current = nxt;
+                    } else {
+                        break;
+                    }
+                }
+
+                let lead_idx = *chain.last().unwrap();
+                let push_mult = if self.form == PlayerForm::Beast {
+                    PUSH_SPEED_MULT_BEAST
+                } else {
+                    PUSH_SPEED_MULT_WITCH
+                };
+                let speed_mult = if self.form == PlayerForm::Beast {
+                    BEAST_SPEED_MULT
+                } else {
+                    1.0
+                };
+                let max_push_speed = 250.0 * speed_mult * push_mult;
+                let max_step_disp = max_push_speed * sub_dt;
+                let push_disp = dir * overlap.min(max_step_disp);
+
+                // Check walls blocking the lead crate
+                let lead_box = crates[lead_idx].aabb();
+                let mut min_wall_dist = f32::INFINITY;
+
+                for wall in solid_tiles {
+                    let y_match = lead_box.min.y < wall.max.y && lead_box.max.y > wall.min.y;
                     if !y_match {
                         continue;
                     }
-                    if dir > 0.0 {
-                        let x_gap = other.pos.x - (curr_pos.x + curr_size.x);
-                        if (-1.0..=2.0).contains(&x_gap) {
-                            next_crate = Some(j);
-                            break;
-                        }
-                    } else {
-                        let x_gap = curr_pos.x - (other.pos.x + other.size.x);
-                        if (-1.0..=2.0).contains(&x_gap) {
-                            next_crate = Some(j);
-                            break;
-                        }
+                    if dir > 0.0 && wall.min.x >= lead_box.max.x - 0.5 {
+                        let dist = (wall.min.x - lead_box.max.x).max(0.0);
+                        min_wall_dist = min_wall_dist.min(dist);
+                    } else if dir < 0.0 && wall.max.x <= lead_box.min.x + 0.5 {
+                        let dist = (lead_box.min.x - wall.max.x).max(0.0);
+                        min_wall_dist = min_wall_dist.min(dist);
                     }
                 }
 
-                if let Some(nxt) = next_crate {
-                    chain.push(nxt);
-                    current = nxt;
+                if min_wall_dist <= 1e-4 {
+                    // Blocked by solid wall: zero velocity and clamp position
+                    for &c_idx in &chain {
+                        crates[c_idx].vel.x = 0.0;
+                    }
+                    if dir > 0.0 {
+                        self.pos.x = crates[chain[0]].pos.x - self.size.x;
+                    } else {
+                        self.pos.x = crates[chain[0]].pos.x + crates[chain[0]].size.x;
+                    }
+                    self.vel.x = 0.0;
                 } else {
-                    break;
+                    // Free to move: apply allowed push displacement
+                    let allowed_disp = if dir > 0.0 {
+                        push_disp.min(min_wall_dist)
+                    } else {
+                        push_disp.max(-min_wall_dist)
+                    };
+
+                    for &c_idx in &chain {
+                        crates[c_idx].pos.x += allowed_disp;
+                        crates[c_idx].vel.x = dir * max_push_speed;
+                    }
+                    if dir > 0.0 {
+                        self.pos.x = crates[chain[0]].pos.x - self.size.x;
+                    } else {
+                        self.pos.x = crates[chain[0]].pos.x + crates[chain[0]].size.x;
+                    }
+                    self.vel.x = dir * max_push_speed;
                 }
             }
-
-            let lead_idx = *chain.last().unwrap();
-            let push_mult = if self.form == PlayerForm::Beast {
-                PUSH_SPEED_MULT_BEAST
-            } else {
-                PUSH_SPEED_MULT_WITCH
-            };
-            let speed_mult = if self.form == PlayerForm::Beast {
-                BEAST_SPEED_MULT
-            } else {
-                1.0
-            };
-            let max_push_speed = 250.0 * speed_mult * push_mult;
-            let push_disp = dir * max_push_speed * sub_dt;
-
-            // Check walls blocking the lead crate
-            let lead_box = crates[lead_idx].aabb();
-            let mut allowed_disp = push_disp;
-
-            for wall in solid_tiles {
-                let y_match = lead_box.min.y < wall.max.y && lead_box.max.y > wall.min.y;
-                if !y_match {
-                    continue;
-                }
-                if dir > 0.0 && wall.min.x >= lead_box.max.x - 0.5 {
-                    let dist = (wall.min.x - lead_box.max.x).max(0.0);
-                    allowed_disp = allowed_disp.min(dist);
-                } else if dir < 0.0 && wall.max.x <= lead_box.min.x + 0.5 {
-                    let dist = (wall.max.x - lead_box.min.x).min(0.0);
-                    allowed_disp = allowed_disp.max(dist);
-                }
-            }
-
-            // Apply push displacement to all crates in chain
-            if allowed_disp.abs() > 1e-4 {
-                for &c_idx in &chain {
-                    crates[c_idx].pos.x += allowed_disp;
-                    crates[c_idx].vel.x = dir * max_push_speed;
-                }
-                if dir > 0.0 {
-                    self.pos.x = crates[chain[0]].pos.x - self.size.x;
-                } else {
-                    self.pos.x = crates[chain[0]].pos.x + crates[chain[0]].size.x;
-                }
-                self.vel.x = dir * max_push_speed;
-            } else {
-                for &c_idx in &chain {
-                    crates[c_idx].vel.x = 0.0;
-                }
-                if dir > 0.0 {
-                    self.pos.x = crates[chain[0]].pos.x - self.size.x;
-                } else {
-                    self.pos.x = crates[chain[0]].pos.x + crates[chain[0]].size.x;
-                }
-                self.vel.x = 0.0;
-            }
-        } else {
-            // Stationary horizontal contact: clamp player at crate edge
-            if dir > 0.0 {
+        } else if self.vel.x == 0.0 {
+            // Stationary horizontal contact: clamp player at crate edge without stopping sliding crate
+            if player_center_x < crate_center_x {
                 self.pos.x = crates[hit_idx].pos.x - self.size.x;
             } else {
                 self.pos.x = crates[hit_idx].pos.x + crates[hit_idx].size.x;

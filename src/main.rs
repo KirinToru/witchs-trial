@@ -251,11 +251,15 @@ impl ApplicationHandler for App {
                                     && self.menu.settings_return_screen == crate::menu::MenuScreen::Pause);
 
                             if is_paused_view {
-                                game.render(renderer, alpha);
+                                game.render_world(renderer, alpha);
                             }
-                            renderer.begin_ui_phase();
                             renderer.set_camera(glam::Vec2::ZERO, game.viewport_size);
                             self.menu.render(renderer, game.viewport_size);
+
+                            if is_paused_view && game.debug_mode {
+                                renderer.begin_ui_phase();
+                                game.render_ui(renderer, alpha);
+                            }
                         }
                         AppState::Playing => {
                             game.render(renderer, alpha);
