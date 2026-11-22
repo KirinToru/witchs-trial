@@ -247,6 +247,13 @@ impl Game {
 
     //------------[Render game frame]-------------------
     pub fn render(&self, renderer: &mut WgpuRenderer, alpha: f32) {
+        self.render_world(renderer, alpha);
+        renderer.begin_ui_phase();
+        self.render_ui(renderer, alpha);
+    }
+
+    //------------[Render world layer subject to voxel post-processing]-------------------
+    pub fn render_world(&self, renderer: &mut WgpuRenderer, alpha: f32) {
         let interp_camera = self.prev_camera_pos.lerp(self.camera_pos, alpha);
         renderer.set_camera(interp_camera, self.viewport_size);
 
@@ -288,6 +295,11 @@ impl Game {
 
         // Player sprite
         self.player.render(renderer, alpha);
+    }
+
+    //------------[Render UI overlays and diagnostic HUD without voxel post-processing]-------------------
+    pub fn render_ui(&self, renderer: &mut WgpuRenderer, alpha: f32) {
+        let interp_camera = self.prev_camera_pos.lerp(self.camera_pos, alpha);
 
         // Debug overlays
         if self.debug_mode {

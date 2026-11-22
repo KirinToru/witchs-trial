@@ -202,6 +202,7 @@ pub enum SettingItem {
     FpsLock,
     TimestepMode,
     AutoBhop,
+    VoxelShader,
     GraphicsBackend,
     Back,
 }
@@ -222,6 +223,7 @@ pub struct GameSettings {
     pub match_timestep: bool,
     pub timestep_mode: TimestepMode,
     pub auto_bhop: bool,
+    pub voxel_shader: bool,
     pub graphics_backend: GraphicsBackendOption,
 }
 
@@ -235,100 +237,114 @@ impl Default for GameSettings {
             match_timestep: false,
             timestep_mode: TimestepMode::Dynamic,
             auto_bhop: true,
+            voxel_shader: true,
             graphics_backend: GraphicsBackendOption::Auto,
         }
     }
 }
 
 impl GameSettings {
-    //------------[Load settings or use defaults]-------------------
-    pub fn load_or_default() -> Self {
-        let mut settings = Self::default();
-        if let Ok(content) = std::fs::read_to_string("settings.cfg") {
-            for line in content.lines() {
-                let trimmed = line.trim();
-                if trimmed.is_empty() || trimmed.starts_with('#') {
-                    continue;
-                }
-                if let Some((key, val)) = trimmed.split_once('=') {
-                    let (k, v) = (key.trim(), val.trim());
-                    match k {
-                        "window_mode" => {
-                            settings.window_mode = match v {
-                                "Borderless" => WindowDisplayMode::Borderless,
-                                "Exclusive" => WindowDisplayMode::Exclusive,
-                                _ => WindowDisplayMode::Windowed,
-                            };
-                        }
-                        "vsync" => {
-                            settings.vsync = v.eq_ignore_ascii_case("true");
-                        }
-                        "match_timestep" => {
-                            settings.match_timestep = v.eq_ignore_ascii_case("true");
-                        }
-                        "fps_lock" => {
-                            settings.fps_lock = match v {
-                                "Unlimited" => FpsLockOption::Unlimited,
-                                "Fps30" => FpsLockOption::Fps30,
-                                "Fps60" => FpsLockOption::Fps60,
-                                "Fps90" => FpsLockOption::Fps90,
-                                "Fps120" => FpsLockOption::Fps120,
-                                "Fps144" => FpsLockOption::Fps144,
-                                "Fps165" => FpsLockOption::Fps165,
-                                "Fps180" => FpsLockOption::Fps180,
-                                "Fps240" => FpsLockOption::Fps240,
-                                "Fps300" => FpsLockOption::Fps300,
-                                _ => FpsLockOption::Fps60,
-                            };
-                        }
-                        "timestep_mode" => {
-                            settings.timestep_mode = match v {
-                                "Dynamic" => TimestepMode::Dynamic,
-                                "Hz30" => TimestepMode::Hz30,
-                                "Hz60" => TimestepMode::Hz60,
-                                "Hz90" => TimestepMode::Hz90,
-                                "Hz120" => TimestepMode::Hz120,
-                                "Hz144" => TimestepMode::Hz144,
-                                "Hz165" => TimestepMode::Hz165,
-                                "Hz180" => TimestepMode::Hz180,
-                                "Hz240" => TimestepMode::Hz240,
-                                "Hz300" => TimestepMode::Hz300,
-                                _ => TimestepMode::Dynamic,
-                            };
-                        }
-                        "auto_bhop" => {
-                            settings.auto_bhop = v.eq_ignore_ascii_case("true");
-                        }
-                        "graphics_backend" => {
-                            settings.graphics_backend = match v {
-                                "Vulkan" => GraphicsBackendOption::Vulkan,
-                                "DirectX12" => GraphicsBackendOption::DirectX12,
-                                "OpenGL" => GraphicsBackendOption::OpenGL,
-                                "Metal" => GraphicsBackendOption::Metal,
-                                _ => GraphicsBackendOption::Auto,
-                            };
-                        }
-                        _ => {}
+    //------------[Parse configuration key-value lines from string]-------------------
+    pub fn parse_from_str(&mut self, content: &str) {
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            if let Some((key, val)) = trimmed.split_once('=') {
+                let (k, v) = (key.trim(), val.trim());
+                match k {
+                    "window_mode" => {
+                        self.window_mode = match v {
+                            "Borderless" => WindowDisplayMode::Borderless,
+                            "Exclusive" => WindowDisplayMode::Exclusive,
+                            _ => WindowDisplayMode::Windowed,
+                        };
                     }
+                    "vsync" => {
+                        self.vsync = v.eq_ignore_ascii_case("true");
+                    }
+                    "match_timestep" => {
+                        self.match_timestep = v.eq_ignore_ascii_case("true");
+                    }
+                    "fps_lock" => {
+                        self.fps_lock = match v {
+                            "Unlimited" => FpsLockOption::Unlimited,
+                            "Fps30" => FpsLockOption::Fps30,
+                            "Fps60" => FpsLockOption::Fps60,
+                            "Fps90" => FpsLockOption::Fps90,
+                            "Fps120" => FpsLockOption::Fps120,
+                            "Fps144" => FpsLockOption::Fps144,
+                            "Fps165" => FpsLockOption::Fps165,
+                            "Fps180" => FpsLockOption::Fps180,
+                            "Fps240" => FpsLockOption::Fps240,
+                            "Fps300" => FpsLockOption::Fps300,
+                            _ => FpsLockOption::Fps60,
+                        };
+                    }
+                    "timestep_mode" => {
+                        self.timestep_mode = match v {
+                            "Dynamic" => TimestepMode::Dynamic,
+                            "Hz30" => TimestepMode::Hz30,
+                            "Hz60" => TimestepMode::Hz60,
+                            "Hz90" => TimestepMode::Hz90,
+                            "Hz120" => TimestepMode::Hz120,
+                            "Hz144" => TimestepMode::Hz144,
+                            "Hz165" => TimestepMode::Hz165,
+                            "Hz180" => TimestepMode::Hz180,
+                            "Hz240" => TimestepMode::Hz240,
+                            "Hz300" => TimestepMode::Hz300,
+                            _ => TimestepMode::Dynamic,
+                        };
+                    }
+                    "auto_bhop" => {
+                        self.auto_bhop = v.eq_ignore_ascii_case("true");
+                    }
+                    "voxel_shader" => {
+                        self.voxel_shader = v.eq_ignore_ascii_case("true");
+                    }
+                    "graphics_backend" => {
+                        self.graphics_backend = match v {
+                            "Vulkan" => GraphicsBackendOption::Vulkan,
+                            "DirectX12" => GraphicsBackendOption::DirectX12,
+                            "OpenGL" => GraphicsBackendOption::OpenGL,
+                            "Metal" => GraphicsBackendOption::Metal,
+                            _ => GraphicsBackendOption::Auto,
+                        };
+                    }
+                    _ => {}
                 }
             }
         }
-        settings
     }
 
-    //------------[Save settings to file]-------------------
-    pub fn save(&self) {
-        let content = format!(
-            "window_mode={:?}\nvsync={}\nmatch_timestep={}\nfps_lock={:?}\ntimestep_mode={:?}\nauto_bhop={}\ngraphics_backend={:?}\n",
+    //------------[Format configuration to string]-------------------
+    pub fn to_config_string(&self) -> String {
+        format!(
+            "window_mode={:?}\nvsync={}\nmatch_timestep={}\nfps_lock={:?}\ntimestep_mode={:?}\nauto_bhop={}\nvoxel_shader={}\ngraphics_backend={:?}\n",
             self.window_mode,
             self.vsync,
             self.match_timestep,
             self.fps_lock,
             self.timestep_mode,
             self.auto_bhop,
+            self.voxel_shader,
             self.graphics_backend
-        );
-        let _ = std::fs::write("settings.cfg", content);
+        )
+    }
+
+    //------------[Load settings or use defaults]-------------------
+    pub fn load_or_default() -> Self {
+        let mut settings = Self::default();
+        if let Ok(content) = std::fs::read_to_string("settings.cfg") {
+            settings.parse_from_str(&content);
+        }
+        settings
+    }
+
+    //------------[Save settings to file]-------------------
+    pub fn save(&self) {
+        let _ = std::fs::write("settings.cfg", self.to_config_string());
     }
 }
 

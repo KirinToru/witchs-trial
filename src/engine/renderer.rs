@@ -44,6 +44,25 @@ pub struct CameraUniform {
     pub view_proj: [f32; 16],
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct VoxelUniforms {
+    pub resolution: [f32; 2],
+    pub voxel_size: f32,
+    pub _pad: f32,
+}
+
+//------------[Calculate scaled voxel size from window height]-------------------
+pub fn calculate_voxel_size(height: f32) -> f32 {
+    ((height / 720.0) * 3.0).clamp(2.0, 6.0)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderPhase {
+    World,
+    Ui,
+}
+
 struct DrawBatch {
     texture_id: usize,
     start_vertex: u32,
@@ -146,13 +165,22 @@ pub struct WgpuRenderer {
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
     pub active_backend_name: String,
     pub supported_present_modes: Vec<wgpu::PresentMode>,
+    pub voxel_shader: bool,
+    pub phase: RenderPhase,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     vertex_buffer_capacity: usize,
     vertices: Vec<Vertex>,
-    batches: Vec<DrawBatch>,
+    world_batches: Vec<DrawBatch>,
+    ui_batches: Vec<DrawBatch>,
+    voxel_uniform_buffer: wgpu::Buffer,
+    voxel_bind_group_layout: wgpu::BindGroupLayout,
+    voxel_bind_group: wgpu::BindGroup,
+    voxel_pipeline: wgpu::RenderPipeline,
+    offscreen_view: wgpu::TextureView,
+    offscreen_sampler: wgpu::Sampler,
     pub default_white: Texture,
     pub debug_font_texture: Texture,
     active_camera_pos: Vec2,
@@ -386,6 +414,145 @@ impl WgpuRenderer {
             mapped_at_creation: false,
         });
 
+        // Offscreen scene texture and view for post-processing
+        let offscreen_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("offscreen_scene_texture"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: surface_config.format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let offscreen_view = offscreen_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let offscreen_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("offscreen_sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            ..Default::default()
+        });
+
+        // Voxel uniforms buffer and bind group layout
+        let initial_voxel_size = calculate_voxel_size(height as f32);
+        let voxel_uniforms = VoxelUniforms {
+            resolution: [width as f32, height as f32],
+            voxel_size: initial_voxel_size,
+            _pad: 0.0,
+        };
+        let voxel_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("voxel_uniform_buffer"),
+            size: std::mem::size_of::<VoxelUniforms>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        queue.write_buffer(&voxel_uniform_buffer, 0, bytemuck::cast_slice(&[voxel_uniforms]));
+
+        let voxel_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("voxel_bind_group_layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+
+        let voxel_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("voxel_bind_group"),
+            layout: &voxel_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: voxel_uniform_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&offscreen_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&offscreen_sampler),
+                },
+            ],
+        });
+
+        let voxel_shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("voxel_post_shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("voxel_post.wgsl"))),
+        });
+
+        let voxel_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("voxel_pipeline_layout"),
+            bind_group_layouts: &[Some(&voxel_bind_group_layout)],
+            immediate_size: 0,
+        });
+
+        let voxel_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("voxel_render_pipeline"),
+            layout: Some(&voxel_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &voxel_shader_module,
+                entry_point: Some("vs_post"),
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &voxel_shader_module,
+                entry_point: Some("fs_post"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: surface_config.format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
         Self {
             window,
             device,
@@ -400,7 +567,16 @@ impl WgpuRenderer {
             vertex_buffer,
             vertex_buffer_capacity: initial_capacity,
             vertices: Vec::with_capacity(initial_capacity),
-            batches: Vec::new(),
+            world_batches: Vec::new(),
+            ui_batches: Vec::new(),
+            voxel_shader: true,
+            phase: RenderPhase::World,
+            voxel_uniform_buffer,
+            voxel_bind_group_layout,
+            voxel_bind_group,
+            voxel_pipeline,
+            offscreen_view,
+            offscreen_sampler,
             default_white,
             debug_font_texture,
             active_camera_pos: Vec2::ZERO,
@@ -409,12 +585,61 @@ impl WgpuRenderer {
         }
     }
 
-    //------------[Resize surface swapchain]-------------------
+    //------------[Resize surface swapchain and offscreen buffers]-------------------
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.surface_config.width = new_size.width;
             self.surface_config.height = new_size.height;
             self.surface.configure(&self.device, &self.surface_config);
+
+            // Rebuild offscreen render target and bind group
+            let offscreen_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("offscreen_scene_texture"),
+                size: wgpu::Extent3d {
+                    width: new_size.width,
+                    height: new_size.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: self.surface_config.format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            self.offscreen_view = offscreen_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+            self.voxel_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("voxel_bind_group"),
+                layout: &self.voxel_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.voxel_uniform_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&self.offscreen_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&self.offscreen_sampler),
+                    },
+                ],
+            });
+
+            // Update voxel uniforms for new window resolution
+            let voxel_size = calculate_voxel_size(new_size.height as f32);
+            let uniforms = VoxelUniforms {
+                resolution: [new_size.width as f32, new_size.height as f32],
+                voxel_size,
+                _pad: 0.0,
+            };
+            self.queue.write_buffer(
+                &self.voxel_uniform_buffer,
+                0,
+                bytemuck::cast_slice(&[uniforms]),
+            );
         }
     }
 
@@ -479,10 +704,15 @@ impl WgpuRenderer {
         let start_vertex = self.vertices.len() as u32;
         self.vertices.extend_from_slice(&[v0, v1, v2, v0, v2, v3]);
 
-        if let Some(last) = self.batches.last_mut().filter(|b| b.texture_id == texture_id) {
+        let batches = match self.phase {
+            RenderPhase::World => &mut self.world_batches,
+            RenderPhase::Ui => &mut self.ui_batches,
+        };
+
+        if let Some(last) = batches.last_mut().filter(|b| b.texture_id == texture_id) {
             last.count += 6;
         } else {
-            self.batches.push(DrawBatch {
+            batches.push(DrawBatch {
                 texture_id,
                 start_vertex,
                 count: 6,
@@ -583,20 +813,9 @@ impl WgpuRenderer {
         let v2 = Vertex { position: [x1, y1], uv: [1.0, 1.0], color };
         let v3 = Vertex { position: [x0, y1], uv: [0.0, 1.0], color };
 
-        let start_vertex = self.vertices.len() as u32;
-        self.vertices.extend_from_slice(&[v0, v1, v2, v0, v2, v3]);
-
         let tex_id = self.default_white.id;
-        if let Some(last) = self.batches.last_mut().filter(|b| b.texture_id == tex_id) {
-            last.count += 6;
-        } else {
-            self.batches.push(DrawBatch {
-                texture_id: tex_id,
-                start_vertex,
-                count: 6,
-                bind_group: self.default_white.bind_group.clone(),
-            });
-        }
+        let bind_group = self.default_white.bind_group.clone();
+        self.push_quad(v0, v1, v2, v3, tex_id, &bind_group);
     }
 
     //------------[Draw textured sprite]-------------------
@@ -671,8 +890,20 @@ impl WgpuRenderer {
 
     //------------[Begin frame batch]-------------------
     pub fn begin_frame(&mut self) {
+        self.phase = RenderPhase::World;
         self.vertices.clear();
-        self.batches.clear();
+        self.world_batches.clear();
+        self.ui_batches.clear();
+    }
+
+    //------------[Switch render queue to UI overlay]-------------------
+    pub fn begin_ui_phase(&mut self) {
+        self.phase = RenderPhase::Ui;
+    }
+
+    //------------[Set voxel post-processing shader state]-------------------
+    pub fn set_voxel_shader(&mut self, enabled: bool) {
+        self.voxel_shader = enabled;
     }
 
     //------------[End frame and submit to GPU]-------------------
@@ -682,7 +913,7 @@ impl WgpuRenderer {
             | wgpu::CurrentSurfaceTexture::Suboptimal(tex) => tex,
             _ => return,
         };
-        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let swapchain_view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         if !self.vertices.is_empty() {
             if self.vertices.len() > self.vertex_buffer_capacity {
@@ -706,36 +937,195 @@ impl WgpuRenderer {
             label: Some("engine_render_encoder"),
         });
 
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("engine_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+        if self.voxel_shader && !self.world_batches.is_empty() {
+            // Pass 1: Render world to offscreen scene texture
+            {
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("world_offscreen_render_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &self.offscreen_view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.0,
+                                g: 0.0,
+                                b: 0.0,
+                                a: 1.0,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
 
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass.set_pipeline(&self.render_pipeline);
+                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
 
-            for batch in &self.batches {
-                render_pass.set_bind_group(1, &batch.bind_group, &[]);
-                render_pass.draw(batch.start_vertex..(batch.start_vertex + batch.count), 0..1);
+                for batch in &self.world_batches {
+                    render_pass.set_bind_group(1, &batch.bind_group, &[]);
+                    render_pass.draw(batch.start_vertex..(batch.start_vertex + batch.count), 0..1);
+                }
+            }
+
+            // Pass 2: Voxel post-processing from offscreen texture to swapchain
+            {
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("voxel_post_render_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &swapchain_view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.0,
+                                g: 0.0,
+                                b: 0.0,
+                                a: 1.0,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+
+                render_pass.set_pipeline(&self.voxel_pipeline);
+                render_pass.set_bind_group(0, &self.voxel_bind_group, &[]);
+                render_pass.draw(0..3, 0..1);
+            }
+
+            // Pass 3: Render UI overlay on top of swapchain with LoadOp::Load
+            if !self.ui_batches.is_empty() {
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("ui_render_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &swapchain_view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+
+                render_pass.set_pipeline(&self.render_pipeline);
+                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
+                for batch in &self.ui_batches {
+                    render_pass.set_bind_group(1, &batch.bind_group, &[]);
+                    render_pass.draw(batch.start_vertex..(batch.start_vertex + batch.count), 0..1);
+                }
+            }
+        } else {
+            // Voxel post-processing disabled: render world directly to swapchain
+            let world_drawn = !self.world_batches.is_empty();
+            if world_drawn {
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("world_direct_render_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &swapchain_view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.0,
+                                g: 0.0,
+                                b: 0.0,
+                                a: 1.0,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+
+                render_pass.set_pipeline(&self.render_pipeline);
+                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
+                for batch in &self.world_batches {
+                    render_pass.set_bind_group(1, &batch.bind_group, &[]);
+                    render_pass.draw(batch.start_vertex..(batch.start_vertex + batch.count), 0..1);
+                }
+            }
+
+            // Render UI overlay on swapchain
+            if !self.ui_batches.is_empty() {
+                let load_op = if world_drawn {
+                    wgpu::LoadOp::Load
+                } else {
+                    wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 1.0,
+                    })
+                };
+
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("ui_direct_render_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &swapchain_view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: load_op,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+
+                render_pass.set_pipeline(&self.render_pipeline);
+                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
+                for batch in &self.ui_batches {
+                    render_pass.set_bind_group(1, &batch.bind_group, &[]);
+                    render_pass.draw(batch.start_vertex..(batch.start_vertex + batch.count), 0..1);
+                }
+            } else if !world_drawn {
+                // Clear swapchain to black if nothing was drawn
+                let _ = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("clear_render_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &swapchain_view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.0,
+                                g: 0.0,
+                                b: 0.0,
+                                a: 1.0,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
             }
         }
 

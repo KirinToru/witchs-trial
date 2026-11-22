@@ -224,7 +224,7 @@ impl MenuSystem {
                 let title_scale = 1.8;
                 let title_w = title.len() as f32 * 8.0 * title_scale;
                 let title_x = (viewport_size.x - title_w) * 0.5;
-                let title_y = 30.0;
+                let title_y = 25.0;
 
                 renderer.draw_debug_text(
                     title,
@@ -235,9 +235,9 @@ impl MenuSystem {
 
                 // Settings Container Box
                 let panel_w = 460.0;
-                let panel_h = 270.0;
+                let panel_h = 258.0;
                 let panel_x = (viewport_size.x - panel_w) * 0.5;
-                let panel_y = 65.0;
+                let panel_y = 55.0;
 
                 renderer.draw_debug_box(
                     Vec2::new(panel_x, panel_y),
@@ -248,8 +248,8 @@ impl MenuSystem {
 
                 let visible = self.visible_settings();
                 let opt_scale = 0.90;
-                let row_start_y = panel_y + 16.0;
-                let row_spacing = 26.0;
+                let row_start_y = panel_y + 14.0;
+                let row_spacing = 24.0;
 
                 for (idx, &item) in visible.iter().enumerate() {
                     let y = row_start_y + idx as f32 * row_spacing;
@@ -262,6 +262,7 @@ impl MenuSystem {
                         SettingItem::FpsLock => format!("Lock FPS:           < {} >", self.settings.fps_lock.label()),
                         SettingItem::TimestepMode => format!("Timestep Mode:      < {} >", self.settings.timestep_mode.label()),
                         SettingItem::AutoBhop => format!("Auto Bunny Hop:     < {} >", if self.settings.auto_bhop { "Enabled" } else { "Disabled" }),
+                        SettingItem::VoxelShader => format!("Voxel Shader:       < {} >", if self.settings.voxel_shader { "Enabled" } else { "Disabled" }),
                         SettingItem::GraphicsBackend => format!("Graphics Backend:   < {} >", self.settings.graphics_backend.label()),
                         SettingItem::Back => {
                             if self.settings_return_screen == MenuScreen::Pause {
@@ -306,7 +307,7 @@ impl MenuSystem {
                     let notice_x = (viewport_size.x - notice_w) * 0.5;
                     renderer.draw_debug_text(
                         restart_notice,
-                        Vec2::new(notice_x, panel_y + panel_h - 18.0),
+                        Vec2::new(notice_x, panel_y + panel_h - 16.0),
                         [0.95, 0.85, 0.20, 0.95],
                         notice_scale,
                     );
@@ -318,7 +319,7 @@ impl MenuSystem {
                 let foot_x = (viewport_size.x - foot_w) * 0.5;
                 renderer.draw_debug_text(
                     footer,
-                    Vec2::new(foot_x, viewport_size.y - 25.0),
+                    Vec2::new(foot_x, viewport_size.y - 20.0),
                     [0.45, 0.45, 0.55, 0.70],
                     foot_scale,
                 );

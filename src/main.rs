@@ -159,6 +159,7 @@ impl ApplicationHandler for App {
             let mut renderer =
                 WgpuRenderer::new_with_backend(window, self.menu.settings.graphics_backend);
             renderer.set_vsync(self.menu.settings.vsync);
+            renderer.set_voxel_shader(self.menu.settings.voxel_shader);
 
             let default_map = self
                 .menu
@@ -252,6 +253,7 @@ impl ApplicationHandler for App {
                             if is_paused_view {
                                 game.render(renderer, alpha);
                             }
+                            renderer.begin_ui_phase();
                             renderer.set_camera(glam::Vec2::ZERO, game.viewport_size);
                             self.menu.render(renderer, game.viewport_size);
                         }
@@ -329,6 +331,7 @@ impl ApplicationHandler for App {
                     if let Some(renderer) = &mut self.renderer {
                         Self::apply_window_mode(&renderer.window, self.menu.settings.window_mode);
                         renderer.set_vsync(self.menu.settings.vsync);
+                        renderer.set_voxel_shader(self.menu.settings.voxel_shader);
                     }
                     self.sync_game_settings();
                 }
