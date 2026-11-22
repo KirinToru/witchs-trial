@@ -9,8 +9,11 @@
 ## Build and Run Commands
 
 ```bash
-# Debug build and test
+# Debug build and execute all 50 unit tests
 cargo test
+
+# Strict linter verification (zero warnings policy)
+cargo clippy --all-targets -- -D warnings
 
 # Build optimized release binary
 cargo build --release

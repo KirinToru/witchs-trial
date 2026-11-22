@@ -42,6 +42,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libvulkan-dev libasound2-dev libudev-dev pkg-config
 
+      - name: Verify Compilation
+        run: cargo check
+
       - name: Verify Code Quality
         run: cargo clippy --all-targets -- -D warnings
 
@@ -110,6 +113,8 @@ jobs:
             ## Architecture Overview
             - Pure platformer precision physics with sub-stepped AABB collision detection.
             - Horizontal tile collider merging eliminating ghost-vertex snagging.
-            - Modular Player Finite State Machine (Idle, Walk, Jump, Fall, WallSlide, DashFreeze, Dash).
+            - Modular Player Finite State Machine (Idle, Walk, Jump, Fall, WallSlide, DashFreeze, Dash) with Beast transformation and damage i-frames.
+            - Pushable crates (PushableBox) with 2D sub-stepped physics, chain pushing, and realistic slide deceleration under friction.
+            - Classic PSX post-processing shader with 15-bit RGB555 quantization, 4x4 ordered Bayer dithering, soft scanlines, and subtle vignette.
             - Multi-backend rendering via wgpu (Vulkan, DirectX 12, Metal, OpenGL).
             - Deterministic fixed-timestep loop (30Hz-300Hz) with sub-frame interpolation.

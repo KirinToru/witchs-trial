@@ -46,15 +46,10 @@ pub struct CameraUniform {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct VoxelUniforms {
+pub struct PsxUniforms {
     pub resolution: [f32; 2],
-    pub voxel_size: f32,
+    pub virtual_scale: f32,
     pub _pad: f32,
-}
-
-//------------[Calculate scaled voxel size from window height]-------------------
-pub fn calculate_voxel_size(height: f32) -> f32 {
-    ((height / 720.0) * 3.0).clamp(2.0, 6.0)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -165,7 +160,7 @@ pub struct WgpuRenderer {
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
     pub active_backend_name: String,
     pub supported_present_modes: Vec<wgpu::PresentMode>,
-    pub voxel_shader: bool,
+    pub psx_shader: bool,
     pub phase: RenderPhase,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -175,10 +170,10 @@ pub struct WgpuRenderer {
     vertices: Vec<Vertex>,
     world_batches: Vec<DrawBatch>,
     ui_batches: Vec<DrawBatch>,
-    voxel_uniform_buffer: wgpu::Buffer,
-    voxel_bind_group_layout: wgpu::BindGroupLayout,
-    voxel_bind_group: wgpu::BindGroup,
-    voxel_pipeline: wgpu::RenderPipeline,
+    psx_uniform_buffer: wgpu::Buffer,
+    psx_bind_group_layout: wgpu::BindGroupLayout,
+    psx_bind_group: wgpu::BindGroup,
+    psx_pipeline: wgpu::RenderPipeline,
     offscreen_view: wgpu::TextureView,
     offscreen_sampler: wgpu::Sampler,
     pub default_white: Texture,
@@ -442,23 +437,23 @@ impl WgpuRenderer {
             ..Default::default()
         });
 
-        // Voxel uniforms buffer and bind group layout
-        let initial_voxel_size = calculate_voxel_size(height as f32);
-        let voxel_uniforms = VoxelUniforms {
+        // PSX uniforms buffer and bind group layout
+        let virtual_scale = (height as f32 / 360.0).floor().max(1.0);
+        let psx_uniforms = PsxUniforms {
             resolution: [width as f32, height as f32],
-            voxel_size: initial_voxel_size,
+            virtual_scale,
             _pad: 0.0,
         };
-        let voxel_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("voxel_uniform_buffer"),
-            size: std::mem::size_of::<VoxelUniforms>() as wgpu::BufferAddress,
+        let psx_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("psx_uniform_buffer"),
+            size: std::mem::size_of::<PsxUniforms>() as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        queue.write_buffer(&voxel_uniform_buffer, 0, bytemuck::cast_slice(&[voxel_uniforms]));
+        queue.write_buffer(&psx_uniform_buffer, 0, bytemuck::cast_slice(&[psx_uniforms]));
 
-        let voxel_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("voxel_bind_group_layout"),
+        let psx_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("psx_bind_group_layout"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -489,13 +484,13 @@ impl WgpuRenderer {
             ],
         });
 
-        let voxel_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("voxel_bind_group"),
-            layout: &voxel_bind_group_layout,
+        let psx_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("psx_bind_group"),
+            layout: &psx_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: voxel_uniform_buffer.as_entire_binding(),
+                    resource: psx_uniform_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -508,28 +503,28 @@ impl WgpuRenderer {
             ],
         });
 
-        let voxel_shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("voxel_post_shader"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("voxel_post.wgsl"))),
+        let psx_shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("psx_post_shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("psx_post.wgsl"))),
         });
 
-        let voxel_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("voxel_pipeline_layout"),
-            bind_group_layouts: &[Some(&voxel_bind_group_layout)],
+        let psx_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("psx_pipeline_layout"),
+            bind_group_layouts: &[Some(&psx_bind_group_layout)],
             immediate_size: 0,
         });
 
-        let voxel_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("voxel_render_pipeline"),
-            layout: Some(&voxel_pipeline_layout),
+        let psx_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("psx_render_pipeline"),
+            layout: Some(&psx_pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &voxel_shader_module,
+                module: &psx_shader_module,
                 entry_point: Some("vs_post"),
                 buffers: &[],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
-                module: &voxel_shader_module,
+                module: &psx_shader_module,
                 entry_point: Some("fs_post"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: surface_config.format,
@@ -569,12 +564,12 @@ impl WgpuRenderer {
             vertices: Vec::with_capacity(initial_capacity),
             world_batches: Vec::new(),
             ui_batches: Vec::new(),
-            voxel_shader: true,
+            psx_shader: true,
             phase: RenderPhase::World,
-            voxel_uniform_buffer,
-            voxel_bind_group_layout,
-            voxel_bind_group,
-            voxel_pipeline,
+            psx_uniform_buffer,
+            psx_bind_group_layout,
+            psx_bind_group,
+            psx_pipeline,
             offscreen_view,
             offscreen_sampler,
             default_white,
@@ -609,13 +604,13 @@ impl WgpuRenderer {
             });
             self.offscreen_view = offscreen_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-            self.voxel_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("voxel_bind_group"),
-                layout: &self.voxel_bind_group_layout,
+            self.psx_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("psx_bind_group"),
+                layout: &self.psx_bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: self.voxel_uniform_buffer.as_entire_binding(),
+                        resource: self.psx_uniform_buffer.as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
@@ -628,15 +623,15 @@ impl WgpuRenderer {
                 ],
             });
 
-            // Update voxel uniforms for new window resolution
-            let voxel_size = calculate_voxel_size(new_size.height as f32);
-            let uniforms = VoxelUniforms {
+            // Update PSX uniforms for new window resolution
+            let virtual_scale = (new_size.height as f32 / 360.0).floor().max(1.0);
+            let uniforms = PsxUniforms {
                 resolution: [new_size.width as f32, new_size.height as f32],
-                voxel_size,
+                virtual_scale,
                 _pad: 0.0,
             };
             self.queue.write_buffer(
-                &self.voxel_uniform_buffer,
+                &self.psx_uniform_buffer,
                 0,
                 bytemuck::cast_slice(&[uniforms]),
             );
@@ -901,9 +896,9 @@ impl WgpuRenderer {
         self.phase = RenderPhase::Ui;
     }
 
-    //------------[Set voxel post-processing shader state]-------------------
-    pub fn set_voxel_shader(&mut self, enabled: bool) {
-        self.voxel_shader = enabled;
+    //------------[Set PSX post-processing shader state]-------------------
+    pub fn set_psx_shader(&mut self, enabled: bool) {
+        self.psx_shader = enabled;
     }
 
     //------------[End frame and submit to GPU]-------------------
@@ -937,7 +932,7 @@ impl WgpuRenderer {
             label: Some("engine_render_encoder"),
         });
 
-        if self.voxel_shader && !self.world_batches.is_empty() {
+        if self.psx_shader && !self.world_batches.is_empty() {
             // Pass 1: Render world to offscreen scene texture
             {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -972,10 +967,10 @@ impl WgpuRenderer {
                 }
             }
 
-            // Pass 2: Voxel post-processing from offscreen texture to swapchain
+            // Pass 2: PSX post-processing from offscreen texture to swapchain
             {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("voxel_post_render_pass"),
+                    label: Some("psx_post_render_pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &swapchain_view,
                         depth_slice: None,
@@ -996,8 +991,8 @@ impl WgpuRenderer {
                     multiview_mask: None,
                 });
 
-                render_pass.set_pipeline(&self.voxel_pipeline);
-                render_pass.set_bind_group(0, &self.voxel_bind_group, &[]);
+                render_pass.set_pipeline(&self.psx_pipeline);
+                render_pass.set_bind_group(0, &self.psx_bind_group, &[]);
                 render_pass.draw(0..3, 0..1);
             }
 
@@ -1030,7 +1025,7 @@ impl WgpuRenderer {
                 }
             }
         } else {
-            // Voxel post-processing disabled: render world directly to swapchain
+            // PSX post-processing disabled: render world directly to swapchain
             let world_drawn = !self.world_batches.is_empty();
             if world_drawn {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

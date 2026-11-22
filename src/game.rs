@@ -254,7 +254,7 @@ impl Game {
         }
     }
 
-    //------------[Render world layer subject to voxel post-processing]-------------------
+    //------------[Render world layer subject to PSX post-processing]-------------------
     pub fn render_world(&self, renderer: &mut WgpuRenderer, alpha: f32) {
         let interp_camera = self.prev_camera_pos.lerp(self.camera_pos, alpha);
         renderer.set_camera(interp_camera, self.viewport_size);
@@ -298,7 +298,7 @@ impl Game {
         // Player sprite
         self.player.render(renderer, alpha);
 
-        // Restart fade overlay rendered in world phase to apply voxel post-processing
+        // Restart fade overlay rendered in world phase to apply PSX post-processing
         if self.fade_alpha > 0.005 {
             renderer.draw_quad(
                 interp_camera,
@@ -308,7 +308,7 @@ impl Game {
         }
     }
 
-    //------------[Render UI overlays and diagnostic HUD without voxel post-processing]-------------------
+    //------------[Render UI overlays and diagnostic HUD without PSX post-processing]-------------------
     pub fn render_ui(&self, renderer: &mut WgpuRenderer, alpha: f32) {
         let interp_camera = self.prev_camera_pos.lerp(self.camera_pos, alpha);
         renderer.set_camera(interp_camera, self.viewport_size);

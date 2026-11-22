@@ -6,5 +6,5 @@ mod test_visible_settings_hierarchy;
 mod test_platform_backend_filtering;
 mod test_settings_arrow_key_adjust;
 mod test_pause_menu_flow;
-mod test_voxel_shader_setting_toggle;
-mod test_voxel_shader_settings_serialization;
+mod test_psx_shader_setting_toggle;
+mod test_psx_shader_settings_serialization;

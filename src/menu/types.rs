@@ -202,7 +202,7 @@ pub enum SettingItem {
     FpsLock,
     TimestepMode,
     AutoBhop,
-    VoxelShader,
+    PsxShader,
     GraphicsBackend,
     Back,
 }
@@ -223,7 +223,7 @@ pub struct GameSettings {
     pub match_timestep: bool,
     pub timestep_mode: TimestepMode,
     pub auto_bhop: bool,
-    pub voxel_shader: bool,
+    pub psx_shader: bool,
     pub graphics_backend: GraphicsBackendOption,
 }
 
@@ -237,7 +237,7 @@ impl Default for GameSettings {
             match_timestep: false,
             timestep_mode: TimestepMode::Dynamic,
             auto_bhop: true,
-            voxel_shader: true,
+            psx_shader: true,
             graphics_backend: GraphicsBackendOption::Auto,
         }
     }
@@ -300,8 +300,8 @@ impl GameSettings {
                     "auto_bhop" => {
                         self.auto_bhop = v.eq_ignore_ascii_case("true");
                     }
-                    "voxel_shader" => {
-                        self.voxel_shader = v.eq_ignore_ascii_case("true");
+                    "psx_shader" => {
+                        self.psx_shader = v.eq_ignore_ascii_case("true");
                     }
                     "graphics_backend" => {
                         self.graphics_backend = match v {
@@ -321,14 +321,14 @@ impl GameSettings {
     //------------[Format configuration to string]-------------------
     pub fn to_config_string(&self) -> String {
         format!(
-            "window_mode={:?}\nvsync={}\nmatch_timestep={}\nfps_lock={:?}\ntimestep_mode={:?}\nauto_bhop={}\nvoxel_shader={}\ngraphics_backend={:?}\n",
+            "window_mode={:?}\nvsync={}\nmatch_timestep={}\nfps_lock={:?}\ntimestep_mode={:?}\nauto_bhop={}\npsx_shader={}\ngraphics_backend={:?}\n",
             self.window_mode,
             self.vsync,
             self.match_timestep,
             self.fps_lock,
             self.timestep_mode,
             self.auto_bhop,
-            self.voxel_shader,
+            self.psx_shader,
             self.graphics_backend
         )
     }

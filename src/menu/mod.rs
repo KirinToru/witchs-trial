@@ -104,7 +104,7 @@ impl MenuSystem {
 
         items.push(SettingItem::TimestepMode);
         items.push(SettingItem::AutoBhop);
-        items.push(SettingItem::VoxelShader);
+        items.push(SettingItem::PsxShader);
         items.push(SettingItem::GraphicsBackend);
         items.push(SettingItem::Back);
         items
@@ -119,7 +119,7 @@ impl MenuSystem {
             SettingItem::FpsLock => self.settings.fps_lock = self.settings.fps_lock.next(),
             SettingItem::TimestepMode => self.settings.timestep_mode = self.settings.timestep_mode.next(),
             SettingItem::AutoBhop => self.settings.auto_bhop = !self.settings.auto_bhop,
-            SettingItem::VoxelShader => self.settings.voxel_shader = !self.settings.voxel_shader,
+            SettingItem::PsxShader => self.settings.psx_shader = !self.settings.psx_shader,
             SettingItem::GraphicsBackend => self.settings.graphics_backend = self.settings.graphics_backend.next(),
             SettingItem::Back => {
                 self.screen = self.settings_return_screen;
@@ -139,7 +139,7 @@ impl MenuSystem {
             SettingItem::FpsLock => self.settings.fps_lock = self.settings.fps_lock.prev(),
             SettingItem::TimestepMode => self.settings.timestep_mode = self.settings.timestep_mode.prev(),
             SettingItem::AutoBhop => self.settings.auto_bhop = !self.settings.auto_bhop,
-            SettingItem::VoxelShader => self.settings.voxel_shader = !self.settings.voxel_shader,
+            SettingItem::PsxShader => self.settings.psx_shader = !self.settings.psx_shader,
             SettingItem::GraphicsBackend => self.settings.graphics_backend = self.settings.graphics_backend.prev(),
             SettingItem::Back => {
                 self.screen = self.settings_return_screen;

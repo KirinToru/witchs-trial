@@ -33,13 +33,14 @@ The engine is structured into six modular subsystems:
                             v    v
                   +-----------------------+
                   |        physics        |
-                  |  (AABB Intersections) |
+                  |  (AABB Intersections, |
+                  |   Pushable Crates)    |
                   +-----------------------+
                             |
                             v
                   +-----------------------+
                   |        engine         |
-                  | (Renderer, Textures,  |
+                  | (Renderer, PSX Shader,|
                   |  Input, Timers, Fonts)|
                   +-----------------------+
 ```
@@ -48,6 +49,7 @@ The engine is structured into six modular subsystems:
 
 1. `engine`:
    - `WgpuRenderer`: Hardware-accelerated 2D quad and textured sprite batch renderer built on `wgpu`.
+   - `PsxUniforms` & `psx_post.wgsl`: Fullscreen post-processing pass applying authentic 15-bit RGB555 color quantization, 4x4 ordered Bayer dithering, soft scanlines, and subtle corner vignette over the rendered world and menu. Bypassed completely when disabled.
    - `InputState`: Bitmask-driven keyboard and mouse state tracking single-frame edges and continuous presses.
    - `TimeAccumulator`: Fixed-timestep accumulator ensuring deterministic physics simulation at configurable frequencies.
    - `FrameLimiter`: Precision sleep and busy-spin frame rate limiter matching monitor refresh rate or custom FPS caps.
@@ -55,28 +57,30 @@ The engine is structured into six modular subsystems:
    - `DebugFont`: Built-in bitmap font generator for diagnostic overlays and HUD telemetry.
 
 2. `game`:
-   - Coordinates active map data, player entity, camera follow tracking, and HUD diagnostics.
+   - Coordinates active map data, player entity, pushable crates, camera follow tracking, and HUD diagnostics.
    - Manages level lifecycle: initial spawn, checkpoints, bottom pit death, victory exit trigger, and death fade transitions.
-   - Tracks performance telemetry: actual FPS, frame render time, simulation frequency, and window mode.
+   - Updates crates first via `PushableBox::update_all`, then updates the player via `Player::update`.
+   - Separates world rendering batches (subject to PSX post-processing) from UI rendering batches (F3 diagnostic HUD rendered crisp).
 
 3. `player`:
-   - Kinematic controller implementing variable jump height, coyote time, jump buffering, wall sliding, and air dashing.
-   - Finite State Machine (`PlayerState`) driving sprite animations and kinematic branches.
-   - Collision resolution module executing adaptive sub-stepped AABB checks against solid walls and one-way platforms.
+   - Kinematic controller implementing variable jump height, coyote time, jump buffering, wall sliding, single wall-jump limit against the same wall, and air dashing.
+   - Form transformation: supports Witch form and The Beast form with enhanced movement multipliers, wall sticking, and 2.0s damage i-frames with knockback on spike collision.
+   - Collision resolution module executing adaptive sub-stepped AABB checks against solid walls, one-way platforms, spikes, void pits, ice surfaces, and pushable crates with chain pushing.
 
-4. `map`:
-   - Custom XML parser for Tiled TMX map files.
+4. `physics`:
+   - `AABB`: Lightweight Axis-Aligned Bounding Box geometry primitives with intersection detection (`overlaps`) and proximity testing (`touches`).
+   - `PushableBox`: 2D physics entity with gravity, terminal velocity, ground friction (500.0 px/s^2), ice friction (110.0 px/s^2), sub-stepping, wall collisions, chain pushing, and realistic slide deceleration.
+
+5. `map`:
+   - Custom XML parser for Tiled TMX map files and TSX tilesets using `roxmltree`.
    - Dynamic tileset resolution mapping arbitrary GIDs to texture UV atlas coordinates.
-   - Horizontal collider merging algorithm combining adjacent solid tiles into consolidated AABB bars.
+   - Horizontal collider merging algorithm combining adjacent solid tiles, platforms, and ice surfaces into consolidated AABB bars.
    - Decodes tile rotation flags (horizontal flip, vertical flip, diagonal flip) and transforms rotated spike hitboxes.
 
-5. `menu`:
-   - Keyboard-driven UI supporting Main, Map Select, Settings, Pause, and Level Complete screens.
-   - Handles real-time adjustments of window mode, VSync, target FPS lock, timestep simulation modes, and auto-bhop toggles.
-
-6. `physics`:
-   - Lightweight Axis-Aligned Bounding Box (`AABB`) geometry primitives.
-   - Intersection detection (`overlaps`) and proximity testing (`touches`).
+6. `menu`:
+   - Keyboard and mouse driven UI supporting Main, Map Select, Settings, Pause, and Level Complete screens.
+   - Handles real-time adjustments of window mode, VSync, target FPS lock, timestep simulation modes, auto-bhop toggles, and PSX post-processing shader.
+   - Persistent settings storage via `settings.cfg`.
 
 ---
 
@@ -87,7 +91,7 @@ The application loop decouples physics simulation from graphics rendering:
 ### Fixed-Timestep Physics with Sub-Frame Interpolation
 - The physics engine runs at a fixed tick rate (configurable between 30 Hz and 300 Hz, default 60 Hz).
 - Accumulator logic (`TimeAccumulator`) gathers real elapsed time each frame and executes discrete simulation steps (`game.update(dt, input)`).
-- Before each physics tick, previous player position (`player.prev_pos`) and previous camera position (`game.prev_camera_pos`) are recorded.
+- Before each physics tick, previous player position (`player.prev_pos`), crate positions (`krate.prev_pos`), and previous camera position (`game.prev_camera_pos`) are recorded.
 - During rendering, the sub-frame fraction `alpha = accumulator / fixed_dt` is computed:
   ```rust
   let render_pos = prev_pos.lerp(pos, alpha);
@@ -108,29 +112,16 @@ To prevent high-speed tunneling through obstacles at lower simulation frequencie
 3. In each sub-step of duration `sub_dt = dt / steps`:
    - Hazard pre-check: verify player hurtbox against hazard tiles.
    - Horizontal movement: displace `pos.x += vel.x * sub_dt`, resolve overlaps against solid colliders, zero `vel.x` on contact.
+   - Pushable crates: resolve horizontal contact with crates, calculate overlap penetration to prevent double-movement, push contiguous crate chains, and apply slide velocity.
    - Vertical movement: displace `pos.y += vel.y * sub_dt`, resolve overlaps against solid colliders, zero `vel.y` and set `grounded = true` on floor contact.
    - One-way platforms: test downward pass-through based on position at sub-step start.
    - Hazard post-check: verify player hurtbox against hazard tiles.
 
 ### Merged Horizontal Colliders
-Adjacent solid wall tiles (ID 8) and one-way platform tiles (ID 9) within the same row are merged into single widened AABB colliders during map loading:
+Adjacent solid wall tiles (ID 8), one-way platform tiles (ID 9), and ice tiles (ID 11) within the same row are merged into single widened AABB colliders during map loading:
 - Eliminates "ghost vertex snagging" where entities catch on internal tile boundaries.
 - Reduces collision check complexity by 70-85% compared to checking individual 32x32 tiles.
 - Visual tiles remain strictly 32x32 individual quads to preserve correct texture tiling without distortion.
-
----
-
-## Player Finite State Machine (FSM)
-
-The player entity is driven by seven mutually exclusive states:
-
-- `Idle`: Grounded with horizontal speed below 8 px/s.
-- `Walk`: Grounded and accelerating/moving horizontally.
-- `Jump`: Airborne with negative vertical velocity (ascending).
-- `Fall`: Airborne with positive vertical velocity (descending).
-- `WallSlide`: Airborne, contacting a wall while pressing toward it with downward speed clamped to a controlled slide curve.
-- `DashFreeze`: 60 ms pause upon dash activation freezing movement before impulse launch.
-- `Dash`: 200 ms horizontal burst tapering smoothly from 600 px/s down to 300 px/s with gravity suppressed.
 
 ---
 

@@ -262,7 +262,7 @@ impl MenuSystem {
                         SettingItem::FpsLock => format!("Lock FPS:           < {} >", self.settings.fps_lock.label()),
                         SettingItem::TimestepMode => format!("Timestep Mode:      < {} >", self.settings.timestep_mode.label()),
                         SettingItem::AutoBhop => format!("Auto Bunny Hop:     < {} >", if self.settings.auto_bhop { "Enabled" } else { "Disabled" }),
-                        SettingItem::VoxelShader => format!("Voxel Shader:       < {} >", if self.settings.voxel_shader { "Enabled" } else { "Disabled" }),
+                        SettingItem::PsxShader => format!("PSX Shader:         < {} >", if self.settings.psx_shader { "Enabled" } else { "Disabled" }),
                         SettingItem::GraphicsBackend => format!("Graphics Backend:   < {} >", self.settings.graphics_backend.label()),
                         SettingItem::Back => {
                             if self.settings_return_screen == MenuScreen::Pause {
