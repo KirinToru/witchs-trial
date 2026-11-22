@@ -2,7 +2,7 @@
 
 use crate::engine::{InputState, Key, Texture, WgpuRenderer};
 use crate::map::{InteractiveKind, InteractiveTile};
-use crate::physics::AABB;
+use crate::physics::{AABB, PushableBox};
 use glam::Vec2;
 
 pub mod collision;
@@ -203,6 +203,7 @@ impl Player {
         void_tiles: &[AABB],
         spike_tiles: &[AABB],
         ice_tiles: &[AABB],
+        crates: &mut [PushableBox],
         interactives: &mut [InteractiveTile],
     ) {
         if self.dead {
@@ -705,6 +706,7 @@ impl Player {
             one_way_platforms,
             void_tiles,
             spike_tiles,
+            crates,
         );
 
         if self.dead {

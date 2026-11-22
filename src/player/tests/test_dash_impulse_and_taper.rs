@@ -14,12 +14,12 @@ fn test_dash_impulse_and_taper() {
     let input = InputState::new();
 
     // Step halfway through dash (0.10s out of 0.20s)
-    player.update(0.10, &input, &[], &[], &[], &[], &[], &mut []);
+    player.update(0.10, &input, &[], &[], &[], &[], &[], &mut [], &mut []);
     assert_eq!(player.state, PlayerState::Dash);
     assert_eq!(player.vel.x, 450.0); // 300 + 300 * 0.5 = 450
 
     // Step to the end of dash duration
-    player.update(0.10, &input, &[], &[], &[], &[], &[], &mut []);
+    player.update(0.10, &input, &[], &[], &[], &[], &[], &mut [], &mut []);
     assert_eq!(player.vel.x, 300.0); // Exit dash speed
     assert!(player.is_bhopping);
 }

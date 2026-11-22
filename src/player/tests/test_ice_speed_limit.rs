@@ -17,7 +17,7 @@ fn test_ice_speed_limit() {
 
     // Accelerate over multiple ticks on solid ice surface
     for _ in 0..60 {
-        witch.update(0.05, &input, &ice_surface, &[], &[], &[], &ice_surface, &mut []);
+        witch.update(0.05, &input, &ice_surface, &[], &[], &[], &ice_surface, &mut [], &mut []);
     }
 
     let expected_witch_max = 250.0 * ICE_SPEED_MULT;
@@ -30,7 +30,7 @@ fn test_ice_speed_limit() {
     beast.grounded = true;
 
     for _ in 0..60 {
-        beast.update(0.05, &input, &ice_surface, &[], &[], &[], &ice_surface, &mut []);
+        beast.update(0.05, &input, &ice_surface, &[], &[], &[], &ice_surface, &mut [], &mut []);
     }
 
     let expected_beast_max = 250.0 * BEAST_SPEED_MULT * ICE_SPEED_MULT;

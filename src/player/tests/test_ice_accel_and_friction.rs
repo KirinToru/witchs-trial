@@ -20,8 +20,8 @@ fn test_ice_accel_and_friction() {
     let mut walk_input = InputState::new();
     walk_input.on_key_event(PhysicalKey::Code(KeyCode::KeyD), winit::event::ElementState::Pressed);
 
-    player_ice.update(dt, &walk_input, &solid_floor, &[], &[], &[], &solid_floor, &mut []);
-    player_normal.update(dt, &walk_input, &solid_floor, &[], &[], &[], &[], &mut []);
+    player_ice.update(dt, &walk_input, &solid_floor, &[], &[], &[], &solid_floor, &mut [], &mut []);
+    player_normal.update(dt, &walk_input, &solid_floor, &[], &[], &[], &[], &mut [], &mut []);
 
     // Ice acceleration is 450.0 * dt = 45.0 px/s, normal is 1800.0 * dt = 180.0 px/s
     assert!((player_ice.vel.x - (ICE_ACCEL * dt)).abs() < 1e-3);
@@ -33,8 +33,8 @@ fn test_ice_accel_and_friction() {
     player_normal.vel.x = 300.0;
     let no_input = InputState::new();
 
-    player_ice.update(dt, &no_input, &solid_floor, &[], &[], &[], &solid_floor, &mut []);
-    player_normal.update(dt, &no_input, &solid_floor, &[], &[], &[], &[], &mut []);
+    player_ice.update(dt, &no_input, &solid_floor, &[], &[], &[], &solid_floor, &mut [], &mut []);
+    player_normal.update(dt, &no_input, &solid_floor, &[], &[], &[], &[], &mut [], &mut []);
 
     // Ice friction reduces speed by ICE_FRICTION * dt (250 * 0.1 = 25 px/s)
     let expected_ice_speed = 300.0 - ICE_FRICTION * dt;

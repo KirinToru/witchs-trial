@@ -20,7 +20,7 @@ fn test_auto_bhop_no_accidental_wall_jump() {
     player.vel = Vec2::new(100.0, -200.0);
 
     // Advance simulation tick
-    player.update(0.02, &input, &[], &[], &[], &[], &[], &mut []);
+    player.update(0.02, &input, &[], &[], &[], &[], &[], &mut [], &mut []);
 
     // Wall jump must not trigger because Space is only held, not freshly pressed
     assert_eq!(player.jumps_count, 0);

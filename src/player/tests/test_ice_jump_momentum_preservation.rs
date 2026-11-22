@@ -17,7 +17,7 @@ fn test_ice_jump_momentum_preservation() {
 
     // Accelerate to top ice speed (337.5)
     for _ in 0..40 {
-        witch.update(0.05, &run_input, &ice_surface, &[], &[], &[], &ice_surface, &mut []);
+        witch.update(0.05, &run_input, &ice_surface, &[], &[], &[], &ice_surface, &mut [], &mut []);
     }
     assert!((witch.vel.x - 250.0 * ICE_SPEED_MULT).abs() < 0.1);
     assert!(witch.on_ice);
@@ -27,7 +27,7 @@ fn test_ice_jump_momentum_preservation() {
     jump_input.on_key_event(PhysicalKey::Code(KeyCode::KeyD), winit::event::ElementState::Pressed);
     jump_input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Pressed);
 
-    witch.update(0.01, &jump_input, &ice_surface, &[], &[], &[], &ice_surface, &mut []);
+    witch.update(0.01, &jump_input, &ice_surface, &[], &[], &[], &ice_surface, &mut [], &mut []);
     assert!(witch.ice_jump_active);
     assert!(!witch.grounded);
     // Crucial check: horizontal velocity must not be clamped down to 300.0 px/s
@@ -39,11 +39,11 @@ fn test_ice_jump_momentum_preservation() {
     beast.grounded = true;
 
     for _ in 0..40 {
-        beast.update(0.05, &run_input, &ice_surface, &[], &[], &[], &ice_surface, &mut []);
+        beast.update(0.05, &run_input, &ice_surface, &[], &[], &[], &ice_surface, &mut [], &mut []);
     }
     assert!((beast.vel.x - 250.0 * BEAST_SPEED_MULT * ICE_SPEED_MULT).abs() < 0.1);
 
-    beast.update(0.01, &jump_input, &ice_surface, &[], &[], &[], &ice_surface, &mut []);
+    beast.update(0.01, &jump_input, &ice_surface, &[], &[], &[], &ice_surface, &mut [], &mut []);
     assert!(beast.ice_jump_active);
     assert!(!beast.grounded);
     // Crucial check: horizontal velocity must not be clamped down to 420.0 px/s (250 * 1.4 * 1.35 = 472.5)
@@ -52,7 +52,7 @@ fn test_ice_jump_momentum_preservation() {
     // 3. Reversing steering in mid-air cancels ice_jump_active and clamps speed to 300.0 px/s
     let mut turn_input = InputState::new();
     turn_input.on_key_event(PhysicalKey::Code(KeyCode::KeyA), winit::event::ElementState::Pressed);
-    witch.update(0.01, &turn_input, &[], &[], &[], &[], &ice_surface, &mut []);
+    witch.update(0.01, &turn_input, &[], &[], &[], &[], &ice_surface, &mut [], &mut []);
     assert!(!witch.ice_jump_active);
     assert!(witch.vel.x <= 300.0);
 
@@ -64,7 +64,7 @@ fn test_ice_jump_momentum_preservation() {
     // Solid wall directly in path
     let solid_wall = vec![AABB::from_pos_size(Vec2::new(52.0, 40.0), Vec2::new(32.0, 64.0))];
     let no_input = InputState::new();
-    wall_player.update(0.02, &no_input, &solid_wall, &[], &[], &[], &[], &mut []);
+    wall_player.update(0.02, &no_input, &solid_wall, &[], &[], &[], &[], &mut [], &mut []);
     assert_eq!(wall_player.vel.x, 0.0);
     assert!(!wall_player.ice_jump_active);
 
@@ -74,7 +74,7 @@ fn test_ice_jump_momentum_preservation() {
     landing_player.grounded = false;
     landing_player.vel = Vec2::new(320.0, 100.0);
     let floor = vec![AABB::from_pos_size(Vec2::new(0.0, 70.0), Vec2::new(200.0, 32.0))];
-    landing_player.update(0.05, &no_input, &floor, &[], &[], &[], &[], &mut []);
+    landing_player.update(0.05, &no_input, &floor, &[], &[], &[], &[], &mut [], &mut []);
     assert!(landing_player.grounded);
     assert!(!landing_player.ice_jump_active);
 }

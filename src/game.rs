@@ -3,11 +3,13 @@
 use glam::Vec2;
 use crate::engine::{InputState, Key, Texture, WgpuRenderer};
 use crate::map::TmxMap;
+use crate::physics::PushableBox;
 use crate::player::Player;
 
 pub struct Game {
     pub map: TmxMap,
     pub player: Player,
+    pub crates: Vec<PushableBox>,
     pub bg_texture: Texture,
     pub camera_pos: Vec2,
     pub prev_camera_pos: Vec2,
@@ -45,9 +47,11 @@ impl Game {
 
         // 640x360 virtual viewport (2x scale on 1280x720)
         let viewport_size = Vec2::new(640.0, 360.0);
+        let crates = map.crate_spawns.iter().map(|&pos| PushableBox::new(pos)).collect();
         let mut game = Self {
             map,
             player,
+            crates,
             bg_texture,
             camera_pos: Vec2::ZERO,
             prev_camera_pos: Vec2::ZERO,
@@ -86,6 +90,9 @@ impl Game {
     pub fn full_restart(&mut self) {
         self.player.reset(self.map.initial_spawn_pos);
         self.player.checkpoint_pos = self.map.initial_spawn_pos;
+        for krate in &mut self.crates {
+            krate.reset();
+        }
         for item in &mut self.map.interactives {
             if item.kind == crate::map::InteractiveKind::Moon {
                 item.activated = false;
@@ -106,6 +113,12 @@ impl Game {
     //------------[Load map]-------------------
     pub fn change_map(&mut self, map_path: &str, renderer: &WgpuRenderer) -> Result<(), String> {
         self.map = TmxMap::load_from_file(map_path, renderer)?;
+        self.crates = self
+            .map
+            .crate_spawns
+            .iter()
+            .map(|&pos| PushableBox::new(pos))
+            .collect();
         self.full_restart();
         Ok(())
     }
@@ -114,6 +127,9 @@ impl Game {
     pub fn reset_level(&mut self) {
         let respawn_pos = self.player.checkpoint_pos;
         self.player.reset(respawn_pos);
+        for krate in &mut self.crates {
+            krate.reset();
+        }
         for item in &mut self.map.interactives {
             if item.kind == crate::map::InteractiveKind::Moon {
                 item.activated = false;
@@ -191,6 +207,19 @@ impl Game {
             }
         }
 
+        // Option 1A: 1. Update pushable crates physics first
+        let map_bottom = self.map.height as f32 * self.map.tile_size;
+        PushableBox::update_all(
+            &mut self.crates,
+            dt,
+            &self.map.solid_colliders,
+            &self.map.one_way_platforms,
+            &self.map.ice_colliders,
+            &self.map.void_colliders,
+            &self.map.spike_colliders,
+            map_bottom,
+        );
+
         // Simulation tick when not in blackout
         if self.fade_alpha < 0.95 && !self.level_finished {
             self.player.auto_bhop = self.auto_bhop;
@@ -202,6 +231,7 @@ impl Game {
                 &self.map.void_colliders,
                 &self.map.spike_colliders,
                 &self.map.ice_colliders,
+                &mut self.crates,
                 &mut self.map.interactives,
             );
         }
@@ -237,6 +267,24 @@ impl Game {
 
         // Map geometry (ts_main hidden unless debug is on)
         self.map.render(renderer, interp_camera, self.viewport_size, self.debug_mode);
+
+        // Pushable crates (brown rectangle with dark outline)
+        for krate in &self.crates {
+            if krate.active {
+                let interp_pos = krate.prev_pos.lerp(krate.pos, alpha);
+                renderer.draw_quad(
+                    interp_pos,
+                    krate.size,
+                    [0.55, 0.35, 0.18, 1.0],
+                );
+                renderer.draw_rect_outline(
+                    interp_pos,
+                    krate.size,
+                    1.5,
+                    [0.28, 0.16, 0.07, 1.0],
+                );
+            }
+        }
 
         // Player sprite
         self.player.render(renderer, alpha);
@@ -323,6 +371,22 @@ impl Game {
             }
         }
 
+        // Pushable crates (orange-yellow)
+        for krate in &self.crates {
+            if krate.active {
+                let interp_pos = krate.prev_pos.lerp(krate.pos, alpha);
+                let c_box = crate::physics::AABB::from_pos_size(interp_pos, krate.size);
+                if view_box.overlaps(&c_box) {
+                    renderer.draw_debug_box(
+                        c_box.min,
+                        c_box.max - c_box.min,
+                        [0.95, 0.65, 0.10, 0.25],
+                        [1.00, 0.75, 0.15, 0.95],
+                    );
+                }
+            }
+        }
+
         // Interpolate player position for debug bounding boxes
         let interp_player_pos = self.player.prev_pos.lerp(self.player.pos, alpha);
 
@@ -359,7 +423,7 @@ impl Game {
 
         // Diagnostic HUD panel
         let panel_pos = interp_camera + Vec2::new(6.0, 6.0);
-        let panel_size = Vec2::new(330.0, 172.0);
+        let panel_size = Vec2::new(330.0, 184.0);
         renderer.draw_debug_box(
             panel_pos,
             panel_size,
@@ -391,9 +455,11 @@ impl Game {
             "-".to_string()
         };
         let ice_str = if self.player.on_ice { "Y" } else { "N" };
+        let active_crates = self.crates.iter().filter(|c| c.active).count();
+        let total_crates = self.crates.len();
 
         let hud_lines = format!(
-            "[DEBUG MONITOR - F3]\nFPS: {} ({:.1} ms) | STEP: {}\nBACKEND: {} | TIMESTEP: {}\nFORM: {} | IFRAMES: {}\nPOS: X: {:.1}, Y: {:.1}\nVEL: X: {:.1}, Y: {:.1} (SPD: {:.1})\nSTATE: {:?} | GRND: {} (ICE:{}) | FACE: {:.0}\nWALL: L:{} R:{} (LAST:{}) | SLIDE: {:.2}s\nDASH: {} | CD: {:.2}s\nMODE: {}\n[F4] CYCLE WINDOW MODE",
+            "[DEBUG MONITOR - F3]\nFPS: {} ({:.1} ms) | STEP: {}\nBACKEND: {} | TIMESTEP: {}\nFORM: {} | IFRAMES: {}\nBOX: {}/{} ACTIVE\nPOS: X: {:.1}, Y: {:.1}\nVEL: X: {:.1}, Y: {:.1} (SPD: {:.1})\nSTATE: {:?} | GRND: {} (ICE:{}) | FACE: {:.0}\nWALL: L:{} R:{} (LAST:{}) | SLIDE: {:.2}s\nDASH: {} | CD: {:.2}s\nMODE: {}\n[F4] CYCLE WINDOW MODE",
             self.fps,
             self.frame_time_ms,
             step_label,
@@ -401,6 +467,8 @@ impl Game {
             self.timestep_mode_name,
             form_str,
             iframes_str,
+            active_crates,
+            total_crates,
             self.player.pos.x,
             self.player.pos.y,
             self.player.vel.x,

@@ -17,7 +17,7 @@ fn test_dash_substepping_tunneling_prevention() {
     // Without sub-stepping, player would tunnel completely past the 8px wall.
     // With sub-stepping (threshold 8.0 px), the step is split into 3 sub-steps and collision is detected.
     let dt = 1.0 / 30.0;
-    player.move_and_collide(dt, false, &thin_wall, &[], &[], &[]);
+    player.move_and_collide(dt, false, &thin_wall, &[], &[], &[], &mut []);
 
     // Player must stop in front of the wall (x = 105.0 - 18.0 = 87.0) with zero velocity
     assert_eq!(player.pos.x, 105.0 - player.size.x);

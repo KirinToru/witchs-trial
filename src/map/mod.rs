@@ -59,6 +59,7 @@ pub struct TmxMap {
     pub ice_colliders: Vec<AABB>,
     pub void_colliders: Vec<AABB>,
     pub spike_colliders: Vec<AABB>,
+    pub crate_spawns: Vec<Vec2>,
     pub interactives: Vec<InteractiveTile>,
     pub bricks_texture: Texture,
     pub prototype_texture: Texture,
@@ -93,6 +94,7 @@ impl TmxMap {
         let mut ice_tile_coords = Vec::new();
         let mut void_colliders = Vec::new();
         let mut spike_colliders = Vec::new();
+        let mut crate_spawns = Vec::new();
         let mut interactives = Vec::new();
         let mut initial_spawn_pos = Vec2::new(100.0, 100.0);
 
@@ -114,8 +116,8 @@ impl TmxMap {
                 if let Some((mapping, local_id)) = resolve_tile(gid, &tileset_mappings) {
                     let (u0, u1, v0, v1) = calc_tile_uv(local_id, mapping.cols, mapping.rows);
 
-                    // Skip static visual for collectible Moon to prevent duplicate rendering
-                    if !(mapping.kind == TilesetKind::Main && local_id == 1) {
+                    // Skip static visual for collectible Moon and dynamic pushable box
+                    if !(mapping.kind == TilesetKind::Main && (local_id == 1 || local_id == 10)) {
                         visuals.push(TileVisual {
                             pos,
                             rot_deg,
@@ -174,6 +176,9 @@ impl TmxMap {
                             }
                             9 => {
                                 one_way_tile_coords.push((col, row));
+                            }
+                            10 => {
+                                crate_spawns.push(pos);
                             }
                             11 => {
                                 // Ice tile acts as a solid collider (preventing seams) and registers as ice
@@ -256,6 +261,7 @@ impl TmxMap {
             ice_colliders,
             void_colliders,
             spike_colliders,
+            crate_spawns,
             interactives,
             bricks_texture,
             prototype_texture,

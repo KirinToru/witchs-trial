@@ -18,7 +18,7 @@ fn test_moon_pickup_beast_transformation() {
     }];
 
     let input = InputState::new();
-    player.update(1.0 / 60.0, &input, &[], &[], &[], &[], &[], &mut interactives);
+    player.update(1.0 / 60.0, &input, &[], &[], &[], &[], &[], &mut [], &mut interactives);
 
     // Moon item must be activated and player transformed into Beast
     assert!(interactives[0].activated);

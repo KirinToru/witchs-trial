@@ -15,19 +15,19 @@ fn test_wall_jump_short_buffer_cleared_on_ground_jump() {
     input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Pressed);
 
     // Initial tick: fresh press loads buffer to 0.08s
-    player.update(0.02, &input, &[], &[], &[], &[], &[], &mut []);
+    player.update(0.02, &input, &[], &[], &[], &[], &[], &mut [], &mut []);
     assert_eq!(player.jumps_count, 0);
     assert_eq!(player.wall_jump_buffer_timer, 0.08);
 
     // Second tick: advancing time without fresh press decrements buffer (0.08 - 0.03 = 0.05)
     input.clear_frame_edges();
-    player.update(0.03, &input, &[], &[], &[], &[], &[], &mut []);
+    player.update(0.03, &input, &[], &[], &[], &[], &[], &mut [], &mut []);
     assert_eq!(player.jumps_count, 0);
     assert!((player.wall_jump_buffer_timer - 0.05).abs() < 1e-4);
 
     // Third tick: player touches wall within remaining buffer window
     player.walled_left = true;
-    player.update(0.02, &input, &[], &[], &[], &[], &[], &mut []);
+    player.update(0.02, &input, &[], &[], &[], &[], &[], &mut [], &mut []);
 
     // Wall jump successfully executed from buffer
     assert_eq!(player.jumps_count, 1);
@@ -43,7 +43,7 @@ fn test_wall_jump_short_buffer_cleared_on_ground_jump() {
     ground_input.on_key_event(PhysicalKey::Code(KeyCode::Space), winit::event::ElementState::Pressed);
 
     // Execute ground jump
-    ground_player.update(0.01, &ground_input, &[], &[], &[], &[], &[], &mut []);
+    ground_player.update(0.01, &ground_input, &[], &[], &[], &[], &[], &mut [], &mut []);
     assert_eq!(ground_player.jumps_count, 1);
     // Ground jump must clear both buffers
     assert_eq!(ground_player.jump_buffer_timer, 0.0);
@@ -52,7 +52,7 @@ fn test_wall_jump_short_buffer_cleared_on_ground_jump() {
 
     // Next tick: player is airborne next to wall, Space remains held
     ground_input.clear_frame_edges();
-    ground_player.update(0.01, &ground_input, &[], &[], &[], &[], &[], &mut []);
+    ground_player.update(0.01, &ground_input, &[], &[], &[], &[], &[], &mut [], &mut []);
 
     // Wall jump must not trigger immediately after ground jump
     assert_eq!(ground_player.jumps_count, 1);

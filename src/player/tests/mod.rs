@@ -23,3 +23,6 @@ mod test_wall_jump_short_buffer_cleared_on_ground_jump;
 mod test_ice_speed_limit;
 mod test_ice_accel_and_friction;
 mod test_ice_jump_momentum_preservation;
+mod test_box_stand_and_jump_no_wall_probe;
+mod test_box_push_witch_vs_beast;
+mod test_box_dash_impulse_and_slide;

@@ -13,7 +13,7 @@ fn test_void_instant_death_in_beast_mode() {
     let void_tiles = vec![AABB::from_pos_size(Vec2::new(102.0, 102.0), Vec2::new(20.0, 20.0))];
 
     // Sub-stepped move and collide with void hazard
-    player.move_and_collide(0.016, false, &[], &[], &void_tiles, &[]);
+    player.move_and_collide(0.016, false, &[], &[], &void_tiles, &[], &mut []);
 
     // Void kills instantly regardless of Beast mode or active i-frames
     assert!(player.dead);
