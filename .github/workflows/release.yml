@@ -101,20 +101,29 @@ jobs:
           files: artifacts/**/*
           generate_release_notes: true
           body: |
-            # Witch's Trial Release
+            # Witch's Trial v0.4.0 Release
 
             Automated multi-platform binary release built with wgpu and winit in Rust.
+
+            ## What's New Since v0.3.0
+            - Dual-form gameplay with The Beast transformation via Moon collectibles, enhanced physics multipliers, wall sticking/sliding, spike hit reversion with 2s i-frames, and instant Void death.
+            - Refined movement mechanics with a single wall-jump limit per wall in mid-air and an auto-bhop fix preventing accidental wall-jumps when holding Space.
+            - Ice surfaces featuring reduced acceleration and friction, boosted speed limits stacking with Beast form, and mid-air jump momentum preservation.
+            - Pushable crates (PushableBox) with 2D sub-stepped physics, chain pushing, dash impulses, and friction-based slide deceleration.
+            - Classic PSX post-processing shader (15-bit RGB555 quantization, 4x4 Bayer dithering, scanlines, and vignette) with a toggle in Settings.
+            - Fixed TimeAccumulator backlog growth during Menu, Pause, and Dynamic timestep mode.
+            - Expanded automated test coverage to 51 headless unit tests across engine, physics, map, player, and menu modules.
+
+            ## Architecture Overview
+            - Pure platformer precision physics with sub-stepped AABB collision detection (8 px threshold).
+            - Horizontal tile collider merging eliminating ghost-vertex snagging.
+            - Dual-form player kinematics and Finite State Machine (Idle, Walk, Jump, Fall, WallSlide, DashFreeze, Dash) with The Beast transformation and damage i-frames.
+            - Pushable crates (PushableBox) with 2D sub-stepped physics, chain pushing, and friction-based slide deceleration.
+            - Classic PSX post-processing shader with 15-bit RGB555 quantization, 4x4 ordered Bayer dithering, soft scanlines, and corner vignette.
+            - Multi-backend rendering via wgpu (Vulkan, DirectX 12, Metal, OpenGL).
+            - Deterministic fixed-timestep loop (30Hz-300Hz) and Dynamic mode with sub-frame interpolation.
 
             ## Checksums and Verification
             Each release archive is accompanied by a SHA256 checksum file. Verify integrity using:
             - Windows: `Get-FileHash -Algorithm SHA256 <archive>`
             - Linux / macOS: `sha256sum -c <checksum_file>`
-
-            ## Architecture Overview
-            - Pure platformer precision physics with sub-stepped AABB collision detection.
-            - Horizontal tile collider merging eliminating ghost-vertex snagging.
-            - Modular Player Finite State Machine (Idle, Walk, Jump, Fall, WallSlide, DashFreeze, Dash) with Beast transformation and damage i-frames.
-            - Pushable crates (PushableBox) with 2D sub-stepped physics, chain pushing, and realistic slide deceleration under friction.
-            - Classic PSX post-processing shader with 15-bit RGB555 quantization, 4x4 ordered Bayer dithering, soft scanlines, and subtle vignette.
-            - Multi-backend rendering via wgpu (Vulkan, DirectX 12, Metal, OpenGL).
-            - Deterministic fixed-timestep loop (30Hz-300Hz) with sub-frame interpolation.
