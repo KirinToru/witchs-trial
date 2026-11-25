@@ -215,6 +215,7 @@ impl Player {
 
         let was_grounded = self.grounded;
         let was_on_ice = self.on_ice;
+        let prev_state = self.state;
 
         // Detect ice surface under feet before movement logic
         self.on_ice = self.check_on_ice(ice_tiles);
@@ -351,6 +352,11 @@ impl Player {
             self.dash_freeze_timer -= dt;
             self.vel = Vec2::ZERO;
             self.state = PlayerState::DashFreeze;
+            if self.state != prev_state {
+                // Reset animation timing when entering dash freeze
+                self.anim_timer = 0.0;
+                self.anim_frame = 0;
+            }
 
             if self.dash_freeze_timer <= 0.0 {
                 let dash_dur = 0.20
@@ -760,11 +766,17 @@ impl Player {
             self.state = PlayerState::Idle;
         }
 
-        // Sprite animation frame update
+        // Reset animation timer and frame on state transition to prevent timing carryover
+        if self.state != prev_state {
+            self.anim_timer = 0.0;
+            self.anim_frame = 0;
+        }
+
+        // Sprite animation frame update in real time
         let (_, frame_count, frame_duration) = self.state.anim_params();
 
         self.anim_timer += dt;
-        if self.anim_timer >= frame_duration {
+        while self.anim_timer >= frame_duration {
             self.anim_timer -= frame_duration;
             self.anim_frame = (self.anim_frame + 1) % frame_count;
         }

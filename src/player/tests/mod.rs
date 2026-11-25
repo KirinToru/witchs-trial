@@ -27,3 +27,4 @@ mod test_box_stand_and_jump_no_wall_probe;
 mod test_box_push_witch_vs_beast;
 mod test_box_dash_impulse_and_slide;
 mod test_box_push_release_slide_deceleration;
+mod test_high_fps_dynamic_idle_stability;

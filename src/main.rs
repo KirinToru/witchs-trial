@@ -108,7 +108,7 @@ impl App {
     }
 
     //------------[Apply window display mode]-------------------
-    fn apply_window_mode(window: &Window, mode: WindowDisplayMode) {
+    fn apply_window_mode(window: &Window, event_loop: &ActiveEventLoop, mode: WindowDisplayMode) {
         match mode {
             WindowDisplayMode::Windowed => {
                 window.set_fullscreen(None);
@@ -120,9 +120,12 @@ impl App {
                 window.set_fullscreen(Some(Fullscreen::Borderless(None)));
             }
             WindowDisplayMode::Exclusive => {
-                let video_mode = window
+                // Fall back to primary or first available monitor if current_monitor is None at startup
+                let monitor = window
                     .current_monitor()
-                    .and_then(|m| m.video_modes().next());
+                    .or_else(|| event_loop.primary_monitor())
+                    .or_else(|| event_loop.available_monitors().next());
+                let video_mode = monitor.and_then(|m| m.video_modes().next());
                 if let Some(m) = video_mode {
                     window.set_fullscreen(Some(Fullscreen::Exclusive(m)));
                 } else {
@@ -156,10 +159,29 @@ impl ApplicationHandler for App {
                     .create_window(window_attributes)
                     .expect("Failed to create window"),
             );
+
+            // Restore saved fullscreen mode right after creating window
+            if matches!(
+                self.menu.settings.window_mode,
+                WindowDisplayMode::Borderless | WindowDisplayMode::Exclusive
+            ) {
+                Self::apply_window_mode(&window, event_loop, self.menu.settings.window_mode);
+            }
+
             let mut renderer =
                 WgpuRenderer::new_with_backend(window, self.menu.settings.graphics_backend);
             renderer.set_vsync(self.menu.settings.vsync);
             renderer.set_psx_shader(self.menu.settings.psx_shader);
+
+            // Sync swapchain and post-process buffers if fullscreen changed window dimensions
+            let current_size = renderer.window.inner_size();
+            if current_size.width > 0
+                && current_size.height > 0
+                && (current_size.width != renderer.surface_config.width
+                    || current_size.height != renderer.surface_config.height)
+            {
+                renderer.resize(current_size);
+            }
 
             let default_map = self
                 .menu
@@ -198,7 +220,9 @@ impl ApplicationHandler for App {
             }
             WindowEvent::Resized(physical_size) => {
                 if let Some(renderer) = &mut self.renderer {
-                    if renderer.window.fullscreen().is_none()
+                    // Only save windowed size when in Windowed mode to avoid overwriting with fullscreen size
+                    if self.menu.settings.window_mode == WindowDisplayMode::Windowed
+                        && renderer.window.fullscreen().is_none()
                         && physical_size.width > 0
                         && physical_size.height > 0
                     {
@@ -225,8 +249,14 @@ impl ApplicationHandler for App {
                 // Quick F4 window mode toggle
                 if self.input.is_just_pressed(Key::ToggleFullscreen) {
                     self.menu.settings.window_mode = self.menu.settings.window_mode.next();
+                    // Save updated window mode immediately so it persists after restart
+                    self.menu.settings.save();
                     if let Some(renderer) = &self.renderer {
-                        Self::apply_window_mode(&renderer.window, self.menu.settings.window_mode);
+                        Self::apply_window_mode(
+                            &renderer.window,
+                            event_loop,
+                            self.menu.settings.window_mode,
+                        );
                     }
                     if let Some(game) = &mut self.game {
                         game.current_window_mode =
@@ -339,7 +369,11 @@ impl ApplicationHandler for App {
 
                 if self.menu.settings_changed {
                     if let Some(renderer) = &mut self.renderer {
-                        Self::apply_window_mode(&renderer.window, self.menu.settings.window_mode);
+                        Self::apply_window_mode(
+                            &renderer.window,
+                            event_loop,
+                            self.menu.settings.window_mode,
+                        );
                         renderer.set_vsync(self.menu.settings.vsync);
                         renderer.set_psx_shader(self.menu.settings.psx_shader);
                     }

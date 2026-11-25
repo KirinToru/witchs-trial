@@ -353,16 +353,32 @@ impl Player {
             }
         }
 
-        // 3. If player was grounded and did not move vertically, verify solid ground contact
-        if !self.grounded && was_grounded && self.vel.y == 0.0 {
+        // 3. Keep player grounded when standing flush on floor or crate at very small dt
+        if !self.grounded && was_grounded && self.vel.y >= 0.0 {
+            // Probe 0.5 px below feet because tiny gravity steps can be smaller than f32 precision
             let ground_probe = AABB::from_pos_size(
-                Vec2::new(self.pos.x + 2.0, self.pos.y + self.size.y),
-                Vec2::new(self.size.x - 4.0, 1.0),
+                Vec2::new(self.pos.x, self.pos.y + self.size.y),
+                Vec2::new(self.size.x, 0.5),
             );
-            let on_solid = solid_tiles.iter().any(|wall| ground_probe.overlaps(wall));
-            let on_crate = crates.iter().any(|c| c.active && ground_probe.overlaps(&c.aabb()));
-            if on_solid || on_crate {
-                self.grounded = true;
+            for wall in solid_tiles {
+                if ground_probe.overlaps(wall) {
+                    self.pos.y = wall.min.y - self.size.y;
+                    self.vel.y = 0.0;
+                    self.grounded = true;
+                    return;
+                }
+            }
+            for krate in crates {
+                if !krate.active {
+                    continue;
+                }
+                let crate_box = krate.aabb();
+                if ground_probe.overlaps(&crate_box) {
+                    self.pos.y = crate_box.min.y - self.size.y;
+                    self.vel.y = 0.0;
+                    self.grounded = true;
+                    return;
+                }
             }
         }
     }
@@ -377,14 +393,16 @@ impl Player {
         if !dropping_down && self.vel.y >= 0.0 {
             let prev_bottom = prev_pos.y + self.size.y;
             let current_bottom = self.pos.y + self.size.y;
+            // Extend foot probe 0.5 px downward so standing on platforms stays stable at high FPS
+            let probe_box = AABB::from_pos_size(self.pos, self.size + Vec2::new(0.0, 0.5));
 
             for plat in one_way_platforms {
-                if prev_bottom <= plat.min.y + 4.0 && current_bottom >= plat.min.y {
+                if prev_bottom <= plat.min.y + 4.0 && current_bottom >= plat.min.y - 1e-4 {
                     let plat_horizontal = AABB::from_pos_size(
                         Vec2::new(plat.min.x, plat.min.y),
                         Vec2::new(plat.max.x - plat.min.x, 8.0),
                     );
-                    if self.aabb().overlaps(&plat_horizontal) {
+                    if probe_box.overlaps(&plat_horizontal) {
                         self.pos.y = plat.min.y - self.size.y;
                         self.vel.y = 0.0;
                         self.grounded = true;
