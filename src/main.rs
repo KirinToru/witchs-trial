@@ -311,6 +311,8 @@ impl ApplicationHandler for App {
                         game.full_restart();
                     }
                     self.state = AppState::Playing;
+                    // Discard time spent in menu and map loading before first play frame
+                    self.time.reset_accumulator();
                 }
 
                 if self.menu.request_restart_level {
@@ -319,6 +321,8 @@ impl ApplicationHandler for App {
                         game.full_restart();
                     }
                     self.state = AppState::Playing;
+                    // Discard menu time before restarting level
+                    self.time.reset_accumulator();
                 }
 
                 if self.menu.request_exit {
@@ -328,6 +332,8 @@ impl ApplicationHandler for App {
 
                 if self.menu.request_resume_game {
                     self.state = AppState::Playing;
+                    // Prevent catching up on time spent in pause menu
+                    self.time.reset_accumulator();
                     self.input.clear_frame_edges();
                 }
 
@@ -338,6 +344,16 @@ impl ApplicationHandler for App {
                         renderer.set_psx_shader(self.menu.settings.psx_shader);
                     }
                     self.sync_game_settings();
+                    // Sync target timestep frequency and reset backlog on settings change
+                    if let Some(hz) = self.menu.settings.timestep_mode.hz() {
+                        self.time.set_hz(hz);
+                    }
+                    self.time.reset_accumulator();
+                }
+
+                // Keep accumulator at zero while staying in menu or pause
+                if self.state == AppState::Menu {
+                    self.time.reset_accumulator();
                 }
 
                 self.input.clear_frame_edges();
@@ -360,12 +376,14 @@ impl ApplicationHandler for App {
                     }
                     self.menu.screen = crate::menu::MenuScreen::LevelComplete;
                     self.state = AppState::Menu;
+                    self.time.reset_accumulator();
                     self.input.clear_frame_edges();
                 } else if self.input.is_just_pressed(Key::Escape) {
-                    // Open pause menu
+                    // Open pause menu and clear pending physics backlog
                     self.state = AppState::Menu;
                     self.menu.screen = crate::menu::MenuScreen::Pause;
                     self.menu.pause_selected = 0;
+                    self.time.reset_accumulator();
                     self.input.clear_frame_edges();
                 } else {
                     let current_hz = self.menu.settings.timestep_mode.hz();
@@ -377,6 +395,8 @@ impl ApplicationHandler for App {
 
                     match self.menu.settings.timestep_mode {
                         crate::menu::TimestepMode::Dynamic => {
+                            // Clear fixed-timestep accumulator so Dynamic mode never builds backlog
+                            self.time.reset_accumulator();
                             // Variable timestep step
                             let dt = frame_duration.min(0.05);
                             if let Some(game) = &mut self.game {

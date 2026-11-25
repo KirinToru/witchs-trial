@@ -21,7 +21,15 @@ impl TimeAccumulator {
         let now = Instant::now();
         let elapsed = now.duration_since(self.last_time).as_secs_f32();
         self.last_time = now;
-        self.accumulator += elapsed.min(0.1);
+        // Limit frame delta and total queued backlog to prevent catch-up bursts
+        self.accumulator = (self.accumulator + elapsed.min(0.1)).min(0.25);
+    }
+
+    //------------[Reset accumulated physics time]-------------------
+    pub fn reset_accumulator(&mut self) {
+        // Clear queued physics time and sync clock without touching FPS tracking
+        self.accumulator = 0.0;
+        self.last_time = Instant::now();
     }
 
     //------------[Consume fixed physics tick]-------------------

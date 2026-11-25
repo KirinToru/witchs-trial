@@ -11,3 +11,6 @@ pub use renderer::{GraphicsBackendOption, WgpuRenderer};
 pub use texture::Texture;
 pub use time::{FrameLimiter, TimeAccumulator};
 
+#[cfg(test)]
+mod tests;
+
