@@ -36,7 +36,7 @@ The game emphasizes tight, responsive platforming kinematics, deterministic phys
 The project enforces strict code quality and unit test coverage adhering to the 1-test-per-file standard:
 
 ```bash
-# Run all 50 unit tests
+# Run all 53 unit tests
 cargo test
 
 # Run strict linter checks

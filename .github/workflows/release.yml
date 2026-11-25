@@ -101,18 +101,14 @@ jobs:
           files: artifacts/**/*
           generate_release_notes: true
           body: |
-            # Witch's Trial v0.4.0 Release
+            # Witch's Trial v0.4.1
 
             Automated multi-platform binary release built with wgpu and winit in Rust.
 
-            ## What's New Since v0.3.0
-            - Dual-form gameplay with The Beast transformation via Moon collectibles, enhanced physics multipliers, wall sticking/sliding, spike hit reversion with 2s i-frames, and instant Void death.
-            - Refined movement mechanics with a single wall-jump limit per wall in mid-air and an auto-bhop fix preventing accidental wall-jumps when holding Space.
-            - Ice surfaces featuring reduced acceleration and friction, boosted speed limits stacking with Beast form, and mid-air jump momentum preservation.
-            - Pushable crates (PushableBox) with 2D sub-stepped physics, chain pushing, dash impulses, and friction-based slide deceleration.
-            - Classic PSX post-processing shader (15-bit RGB555 quantization, 4x4 Bayer dithering, scanlines, and vignette) with a toggle in Settings.
-            - Fixed TimeAccumulator backlog growth during Menu, Pause, and Dynamic timestep mode.
-            - Expanded automated test coverage to 51 headless unit tests across engine, physics, map, player, and menu modules.
+            ## What's New Since v0.4.0
+            - **Window Mode Persistence:** Applied saved Borderless and Exclusive Fullscreen modes automatically on startup with monitor fallback handling and swapchain resize sync; persisted F4 quick-toggle changes to `settings.cfg` and prevented fullscreen dimensions from overwriting saved Windowed size.
+            - **High-FPS Dynamic Idle & Grounding Stability:** Replaced the inactive `vel.y == 0.0` floor check with a 0.5 px downward ground probe across solid floors, crates, and one-way platforms to eliminate `f32` precision flicker at very high framerates (e.g., 3000+ FPS with VSync off and Dynamic timestep).
+            - **Animation Timing & Tests:** Reset player animation timer/frame on state transitions with real-time `while`-loop accumulation; expanded the headless unit test suite to 53 passing tests.
 
             ## Architecture Overview
             - Pure platformer precision physics with sub-stepped AABB collision detection (8 px threshold).
