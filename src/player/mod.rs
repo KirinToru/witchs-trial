@@ -1,6 +1,6 @@
 //! Player entity kinematics, state transitions, collision resolution, and animation.
 
-use crate::engine::{InputState, Key, Texture, WgpuRenderer};
+use crate::engine::{InputState, Key, SfxEvent, Texture, WgpuRenderer};
 use crate::map::{InteractiveKind, InteractiveTile};
 use crate::physics::{AABB, PushableBox};
 use glam::Vec2;
@@ -70,6 +70,7 @@ pub struct Player {
     pub auto_bhop: bool,
     pub status_message: Option<String>,
     pub status_timer: f32,
+    pub pending_sfx: Vec<SfxEvent>,
     pub(crate) anim_timer: f32,
     pub(crate) anim_frame: usize,
     pub spritesheet: Option<Texture>,
@@ -116,6 +117,7 @@ impl Player {
             auto_bhop: true,
             status_message: None,
             status_timer: 0.0,
+            pending_sfx: Vec::new(),
             anim_timer: 0.0,
             anim_frame: 0,
             spritesheet: None,
@@ -163,6 +165,7 @@ impl Player {
         self.bhop_velocity = 0.0;
         self.bhop_timer = 0.0;
         self.is_bhopping = false;
+        self.pending_sfx.clear();
         self.anim_timer = 0.0;
         self.anim_frame = 0;
     }
@@ -286,6 +289,7 @@ impl Player {
                 if player_box.overlaps(&item_box) {
                     item.activated = true;
                     self.form = PlayerForm::Beast;
+                    self.pending_sfx.push(SfxEvent::BeastTransform);
                     self.status_message = Some("The Beast Unleashed!".to_string());
                     self.status_timer = 2.0;
                 }
@@ -305,6 +309,9 @@ impl Player {
                             self.status_timer = 2.0;
                         }
                         InteractiveKind::Checkpoint => {
+                            if !item.activated || self.checkpoint_pos != item.pos {
+                                self.pending_sfx.push(SfxEvent::Checkpoint);
+                            }
                             self.checkpoint_pos = item.pos;
                             item.activated = true;
                             self.status_message = Some("Checkpoint Activated!".to_string());
@@ -345,6 +352,7 @@ impl Player {
             self.can_dash = false;
             self.dash_cooldown = 0.45;
             self.dashes_count += 1;
+            self.pending_sfx.push(SfxEvent::Dash);
         }
 
         // Dash freeze phase
@@ -624,6 +632,7 @@ impl Player {
             self.last_wall_dir = Some(wall_dir);
             // Wall jump cancels ice jump momentum bonus
             self.ice_jump_active = false;
+            self.pending_sfx.push(SfxEvent::WallJump);
         } else if ((self.jump_buffer_timer > 0.0 && (self.grounded || self.coyote_timer > 0.0))
             || (self.grounded && self.auto_bhop && input.is_pressed(Key::Jump)))
             && self.dash_timer <= 0.0
@@ -684,6 +693,7 @@ impl Player {
             self.wall_jump_buffer_timer = 0.0;
             self.bhop_timer = 0.0;
             self.jumps_count += 1;
+            self.pending_sfx.push(SfxEvent::Jump);
         }
 
         // Gravity curve and variable jump height
@@ -702,6 +712,9 @@ impl Player {
 
             self.vel.y = (self.vel.y + gravity * dt).min(720.0);
         }
+
+        // Capture vertical speed before collision zeros it to detect real landings
+        let pre_move_vel_y = self.vel.y;
 
         // Movement and collision with adaptive sub-stepping
         let dropping_down = input.is_pressed(Key::Down);
@@ -722,6 +735,10 @@ impl Player {
         // Landing event
         let just_landed = !was_grounded && self.grounded;
         if just_landed {
+            // Emit landing sound only after noticeable downward velocity
+            if pre_move_vel_y > 30.0 {
+                self.pending_sfx.push(SfxEvent::Land);
+            }
             if self.is_bhopping && self.bhop_velocity.abs() > 200.0 {
                 self.bhop_timer = 0.15;
             } else {

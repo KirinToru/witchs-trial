@@ -203,6 +203,8 @@ pub enum SettingItem {
     TimestepMode,
     AutoBhop,
     PsxShader,
+    MusicVolume,
+    SfxVolume,
     GraphicsBackend,
     Back,
 }
@@ -224,6 +226,8 @@ pub struct GameSettings {
     pub timestep_mode: TimestepMode,
     pub auto_bhop: bool,
     pub psx_shader: bool,
+    pub music_volume: u8,
+    pub sfx_volume: u8,
     pub graphics_backend: GraphicsBackendOption,
 }
 
@@ -238,6 +242,8 @@ impl Default for GameSettings {
             timestep_mode: TimestepMode::Dynamic,
             auto_bhop: true,
             psx_shader: true,
+            music_volume: 70,
+            sfx_volume: 80,
             graphics_backend: GraphicsBackendOption::Auto,
         }
     }
@@ -303,6 +309,18 @@ impl GameSettings {
                     "psx_shader" => {
                         self.psx_shader = v.eq_ignore_ascii_case("true");
                     }
+                    "music_volume" => {
+                        // Parse percentage safely and clamp into 0..=100; ignore invalid values
+                        if let Ok(parsed) = v.parse::<u16>() {
+                            self.music_volume = parsed.min(100) as u8;
+                        }
+                    }
+                    "sfx_volume" => {
+                        // Parse percentage safely and clamp into 0..=100; ignore invalid values
+                        if let Ok(parsed) = v.parse::<u16>() {
+                            self.sfx_volume = parsed.min(100) as u8;
+                        }
+                    }
                     "graphics_backend" => {
                         self.graphics_backend = match v {
                             "Vulkan" => GraphicsBackendOption::Vulkan,
@@ -321,7 +339,7 @@ impl GameSettings {
     //------------[Format configuration to string]-------------------
     pub fn to_config_string(&self) -> String {
         format!(
-            "window_mode={:?}\nvsync={}\nmatch_timestep={}\nfps_lock={:?}\ntimestep_mode={:?}\nauto_bhop={}\npsx_shader={}\ngraphics_backend={:?}\n",
+            "window_mode={:?}\nvsync={}\nmatch_timestep={}\nfps_lock={:?}\ntimestep_mode={:?}\nauto_bhop={}\npsx_shader={}\nmusic_volume={}\nsfx_volume={}\ngraphics_backend={:?}\n",
             self.window_mode,
             self.vsync,
             self.match_timestep,
@@ -329,6 +347,8 @@ impl GameSettings {
             self.timestep_mode,
             self.auto_bhop,
             self.psx_shader,
+            self.music_volume,
+            self.sfx_volume,
             self.graphics_backend
         )
     }

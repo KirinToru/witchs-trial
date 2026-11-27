@@ -12,4 +12,5 @@ glam = "0.34.1"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 log = "0.4.34"
 env_logger = "0.11.11"
+rodio = { version = "0.23.0", default-features = false, features = ["playback", "wav", "vorbis"] }
 

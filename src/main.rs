@@ -36,7 +36,8 @@ static LAST_WINDOW_WIDTH: AtomicU32 = AtomicU32::new(1280);
 static LAST_WINDOW_HEIGHT: AtomicU32 = AtomicU32::new(720);
 
 use crate::engine::{
-    FrameLimiter, GraphicsBackendOption, InputState, Key, TimeAccumulator, WgpuRenderer,
+    AudioSystem, FrameLimiter, GraphicsBackendOption, InputState, Key, MusicTrack, TimeAccumulator,
+    WgpuRenderer,
 };
 use crate::game::Game;
 use crate::menu::{MenuSystem, WindowDisplayMode};
@@ -51,6 +52,7 @@ struct App {
     renderer: Option<WgpuRenderer>,
     game: Option<Game>,
     menu: MenuSystem,
+    audio: AudioSystem,
     state: AppState,
     input: InputState,
     time: TimeAccumulator,
@@ -93,10 +95,16 @@ impl App {
         let initial_backend = menu.settings.graphics_backend;
         let initial_hz = menu.settings.timestep_mode.hz().unwrap_or(60.0);
 
+        // Initialize disk-based audio system with saved volume settings
+        let mut audio = AudioSystem::new();
+        audio.set_music_volume(menu.settings.music_volume);
+        audio.set_sfx_volume(menu.settings.sfx_volume);
+
         Self {
             renderer: None,
             game: None,
             menu,
+            audio,
             state: AppState::Menu,
             input: InputState::new(),
             time: TimeAccumulator::new(initial_hz),
@@ -327,6 +335,10 @@ impl ApplicationHandler for App {
                 };
 
                 self.menu.update(&self.input, window_size, viewport_size);
+                // Play menu navigation and confirmation sound effects
+                for sfx in self.menu.pending_sfx.drain(..) {
+                    self.audio.play_sfx(sfx);
+                }
 
                 if self.menu.request_start_game {
                     if let (Some(game), Some(renderer)) = (&mut self.game, &self.renderer) {
@@ -377,12 +389,31 @@ impl ApplicationHandler for App {
                         renderer.set_vsync(self.menu.settings.vsync);
                         renderer.set_psx_shader(self.menu.settings.psx_shader);
                     }
+                    // Apply updated volume percentages immediately
+                    self.audio.set_music_volume(self.menu.settings.music_volume);
+                    self.audio.set_sfx_volume(self.menu.settings.sfx_volume);
                     self.sync_game_settings();
                     // Sync target timestep frequency and reset backlog on settings change
                     if let Some(hz) = self.menu.settings.timestep_mode.hz() {
                         self.time.set_hz(hz);
                     }
                     self.time.reset_accumulator();
+                }
+
+                // Update music track and pause state according to current screen
+                if self.state == AppState::Playing {
+                    self.audio.set_music_paused(false);
+                    self.audio.play_music(MusicTrack::Level);
+                } else {
+                    let is_paused_view = self.menu.screen == crate::menu::MenuScreen::Pause
+                        || (self.menu.screen == crate::menu::MenuScreen::Settings
+                            && self.menu.settings_return_screen == crate::menu::MenuScreen::Pause);
+                    if is_paused_view {
+                        self.audio.set_music_paused(true);
+                    } else {
+                        self.audio.set_music_paused(false);
+                        self.audio.play_music(MusicTrack::Menu);
+                    }
                 }
 
                 // Keep accumulator at zero while staying in menu or pause
@@ -400,7 +431,10 @@ impl ApplicationHandler for App {
                     .map(|g| g.level_finished)
                     .unwrap_or(false);
                 if level_just_finished {
-                    if let Some(game) = &self.game {
+                    if let Some(game) = &mut self.game {
+                        for sfx in game.player.pending_sfx.drain(..) {
+                            self.audio.play_sfx(sfx);
+                        }
                         self.menu.level_stats = Some(crate::menu::LevelStats {
                             time_secs: game.level_time,
                             deaths: game.deaths_count,
@@ -410,16 +444,22 @@ impl ApplicationHandler for App {
                     }
                     self.menu.screen = crate::menu::MenuScreen::LevelComplete;
                     self.state = AppState::Menu;
+                    self.audio.set_music_paused(false);
+                    self.audio.play_music(MusicTrack::Menu);
                     self.time.reset_accumulator();
                     self.input.clear_frame_edges();
                 } else if self.input.is_just_pressed(Key::Escape) {
-                    // Open pause menu and clear pending physics backlog
+                    // Open pause menu, pause level music, and clear pending physics backlog
                     self.state = AppState::Menu;
                     self.menu.screen = crate::menu::MenuScreen::Pause;
                     self.menu.pause_selected = 0;
+                    self.audio.set_music_paused(true);
                     self.time.reset_accumulator();
                     self.input.clear_frame_edges();
                 } else {
+                    self.audio.set_music_paused(false);
+                    self.audio.play_music(MusicTrack::Level);
+
                     let current_hz = self.menu.settings.timestep_mode.hz();
                     let current_label = self.menu.settings.timestep_mode.label().to_string();
                     if let Some(game) = &mut self.game {
@@ -435,6 +475,9 @@ impl ApplicationHandler for App {
                             let dt = frame_duration.min(0.05);
                             if let Some(game) = &mut self.game {
                                 game.update(dt, &self.input);
+                                for sfx in game.player.pending_sfx.drain(..) {
+                                    self.audio.play_sfx(sfx);
+                                }
                             }
                             self.input.clear_frame_edges();
                         }
@@ -447,6 +490,9 @@ impl ApplicationHandler for App {
                             while self.time.step() {
                                 if let Some(game) = &mut self.game {
                                     game.update(dt, &self.input);
+                                    for sfx in game.player.pending_sfx.drain(..) {
+                                        self.audio.play_sfx(sfx);
+                                    }
                                 }
                                 self.input.clear_frame_edges();
                             }

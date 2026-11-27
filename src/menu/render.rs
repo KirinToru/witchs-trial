@@ -219,12 +219,12 @@ impl MenuSystem {
                 );
             }
             MenuScreen::Settings => {
-                // Settings Header
+                // Settings Header (compact layout to fit 11 rows + notice + footer in 640x360)
                 let title = "SETTINGS";
-                let title_scale = 1.8;
+                let title_scale = 1.6;
                 let title_w = title.len() as f32 * 8.0 * title_scale;
                 let title_x = (viewport_size.x - title_w) * 0.5;
-                let title_y = 25.0;
+                let title_y = 14.0;
 
                 renderer.draw_debug_text(
                     title,
@@ -235,9 +235,9 @@ impl MenuSystem {
 
                 // Settings Container Box
                 let panel_w = 460.0;
-                let panel_h = 258.0;
+                let panel_h = 276.0;
                 let panel_x = (viewport_size.x - panel_w) * 0.5;
-                let panel_y = 55.0;
+                let panel_y = 35.0;
 
                 renderer.draw_debug_box(
                     Vec2::new(panel_x, panel_y),
@@ -247,9 +247,9 @@ impl MenuSystem {
                 );
 
                 let visible = self.visible_settings();
-                let opt_scale = 0.90;
-                let row_start_y = panel_y + 14.0;
-                let row_spacing = 24.0;
+                let opt_scale = 0.85;
+                let row_start_y = panel_y + 9.0;
+                let row_spacing = 22.0;
 
                 for (idx, &item) in visible.iter().enumerate() {
                     let y = row_start_y + idx as f32 * row_spacing;
@@ -263,6 +263,8 @@ impl MenuSystem {
                         SettingItem::TimestepMode => format!("Timestep Mode:      < {} >", self.settings.timestep_mode.label()),
                         SettingItem::AutoBhop => format!("Auto Bunny Hop:     < {} >", if self.settings.auto_bhop { "Enabled" } else { "Disabled" }),
                         SettingItem::PsxShader => format!("PSX Shader:         < {} >", if self.settings.psx_shader { "Enabled" } else { "Disabled" }),
+                        SettingItem::MusicVolume => format!("Music Volume:       < {}% >", self.settings.music_volume),
+                        SettingItem::SfxVolume => format!("SFX Volume:         < {}% >", self.settings.sfx_volume),
                         SettingItem::GraphicsBackend => format!("Graphics Backend:   < {} >", self.settings.graphics_backend.label()),
                         SettingItem::Back => {
                             if self.settings_return_screen == MenuScreen::Pause {
@@ -278,8 +280,8 @@ impl MenuSystem {
 
                     if is_selected {
                         renderer.draw_debug_box(
-                            Vec2::new(panel_x + 8.0, y - 4.0),
-                            Vec2::new(panel_w - 16.0, 8.0 * opt_scale + 8.0),
+                            Vec2::new(panel_x + 8.0, y - 3.0),
+                            Vec2::new(panel_w - 16.0, 8.0 * opt_scale + 6.0),
                             [0.22, 0.05, 0.05, 0.60],
                             [0.90, 0.22, 0.22, 0.85],
                         );
@@ -307,7 +309,7 @@ impl MenuSystem {
                     let notice_x = (viewport_size.x - notice_w) * 0.5;
                     renderer.draw_debug_text(
                         restart_notice,
-                        Vec2::new(notice_x, panel_y + panel_h - 16.0),
+                        Vec2::new(notice_x, panel_y + panel_h - 19.0),
                         [0.95, 0.85, 0.20, 0.95],
                         notice_scale,
                     );
@@ -319,7 +321,7 @@ impl MenuSystem {
                 let foot_x = (viewport_size.x - foot_w) * 0.5;
                 renderer.draw_debug_text(
                     footer,
-                    Vec2::new(foot_x, viewport_size.y - 20.0),
+                    Vec2::new(foot_x, viewport_size.y - 24.0),
                     [0.45, 0.45, 0.55, 0.70],
                     foot_scale,
                 );

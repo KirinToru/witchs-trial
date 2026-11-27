@@ -1,7 +1,7 @@
 //! Gameplay coordinator managing map state, player entity, camera tracking, and HUD.
 
 use glam::Vec2;
-use crate::engine::{InputState, Key, Texture, WgpuRenderer};
+use crate::engine::{InputState, Key, SfxEvent, Texture, WgpuRenderer};
 use crate::map::TmxMap;
 use crate::physics::PushableBox;
 use crate::player::Player;
@@ -167,6 +167,7 @@ impl Game {
         let map_bottom = self.map.height as f32 * self.map.tile_size;
         if self.player.pos.y > map_bottom && !self.player.dead {
             self.player.dead = true;
+            self.player.pending_sfx.push(SfxEvent::Death);
         }
 
         // Death counter
@@ -181,6 +182,9 @@ impl Game {
             if item.kind == crate::map::InteractiveKind::LevelExit {
                 let exit_box = crate::physics::AABB::from_pos_size(item.pos, item.size);
                 if player_box.overlaps(&exit_box) {
+                    if !self.level_finished {
+                        self.player.pending_sfx.push(SfxEvent::LevelComplete);
+                    }
                     item.activated = true;
                     self.level_finished = true;
                 }

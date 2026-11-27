@@ -10,7 +10,7 @@ pub use types::{
 };
 
 use glam::Vec2;
-use crate::engine::{GraphicsBackendOption, InputState, Key};
+use crate::engine::{GraphicsBackendOption, InputState, Key, SfxEvent};
 
 pub struct MenuSystem {
     pub screen: MenuScreen,
@@ -30,6 +30,7 @@ pub struct MenuSystem {
     pub request_exit: bool,
     pub settings_changed: bool,
     pub level_stats: Option<LevelStats>,
+    pub pending_sfx: Vec<SfxEvent>,
 }
 
 impl MenuSystem {
@@ -84,6 +85,7 @@ impl MenuSystem {
             request_exit: false,
             settings_changed: false,
             level_stats: None,
+            pending_sfx: Vec::new(),
         };
         menu.refresh_maps();
         menu
@@ -105,13 +107,15 @@ impl MenuSystem {
         items.push(SettingItem::TimestepMode);
         items.push(SettingItem::AutoBhop);
         items.push(SettingItem::PsxShader);
+        items.push(SettingItem::MusicVolume);
+        items.push(SettingItem::SfxVolume);
         items.push(SettingItem::GraphicsBackend);
         items.push(SettingItem::Back);
         items
     }
 
     //------------[Cycle next setting value]-------------------
-    fn activate_setting_next(&mut self, item: SettingItem) {
+    fn activate_setting_next(&mut self, item: SettingItem, wrap_volume: bool) {
         match item {
             SettingItem::WindowMode => self.settings.window_mode = self.settings.window_mode.next(),
             SettingItem::VSync => self.settings.vsync = !self.settings.vsync,
@@ -120,6 +124,22 @@ impl MenuSystem {
             SettingItem::TimestepMode => self.settings.timestep_mode = self.settings.timestep_mode.next(),
             SettingItem::AutoBhop => self.settings.auto_bhop = !self.settings.auto_bhop,
             SettingItem::PsxShader => self.settings.psx_shader = !self.settings.psx_shader,
+            SettingItem::MusicVolume => {
+                // Clamp at 100% with Right arrow, wrap to 0% with Enter/Space
+                if wrap_volume && self.settings.music_volume >= 100 {
+                    self.settings.music_volume = 0;
+                } else {
+                    self.settings.music_volume = (self.settings.music_volume + 10).min(100);
+                }
+            }
+            SettingItem::SfxVolume => {
+                // Clamp at 100% with Right arrow, wrap to 0% with Enter/Space
+                if wrap_volume && self.settings.sfx_volume >= 100 {
+                    self.settings.sfx_volume = 0;
+                } else {
+                    self.settings.sfx_volume = (self.settings.sfx_volume + 10).min(100);
+                }
+            }
             SettingItem::GraphicsBackend => self.settings.graphics_backend = self.settings.graphics_backend.next(),
             SettingItem::Back => {
                 self.screen = self.settings_return_screen;
@@ -140,6 +160,14 @@ impl MenuSystem {
             SettingItem::TimestepMode => self.settings.timestep_mode = self.settings.timestep_mode.prev(),
             SettingItem::AutoBhop => self.settings.auto_bhop = !self.settings.auto_bhop,
             SettingItem::PsxShader => self.settings.psx_shader = !self.settings.psx_shader,
+            SettingItem::MusicVolume => {
+                // Decrease by 10% stopping at 0%
+                self.settings.music_volume = self.settings.music_volume.saturating_sub(10);
+            }
+            SettingItem::SfxVolume => {
+                // Decrease by 10% stopping at 0%
+                self.settings.sfx_volume = self.settings.sfx_volume.saturating_sub(10);
+            }
             SettingItem::GraphicsBackend => self.settings.graphics_backend = self.settings.graphics_backend.prev(),
             SettingItem::Back => {
                 self.screen = self.settings_return_screen;
@@ -167,12 +195,15 @@ impl MenuSystem {
                     } else {
                         self.main_selected -= 1;
                     }
+                    self.pending_sfx.push(SfxEvent::MenuMove);
                 }
                 if input.is_just_pressed(Key::Down) {
                     self.main_selected = (self.main_selected + 1) % 3;
+                    self.pending_sfx.push(SfxEvent::MenuMove);
                 }
 
                 if input.is_just_pressed(Key::Confirm) {
+                    self.pending_sfx.push(SfxEvent::MenuConfirm);
                     match self.main_selected {
                         0 => {
                             self.refresh_maps();
@@ -199,14 +230,17 @@ impl MenuSystem {
                     } else {
                         self.map_selected -= 1;
                     }
+                    self.pending_sfx.push(SfxEvent::MenuMove);
                 }
                 if input.is_just_pressed(Key::Down) {
                     if total_items > 0 {
                         self.map_selected = (self.map_selected + 1) % total_items;
                     }
+                    self.pending_sfx.push(SfxEvent::MenuMove);
                 }
 
                 if input.is_just_pressed(Key::Confirm) {
+                    self.pending_sfx.push(SfxEvent::MenuConfirm);
                     if self.map_selected < self.available_maps.len() {
                         let chosen_file = &self.available_maps[self.map_selected];
                         self.selected_map_path = Some(format!("assets/maps/{}", chosen_file));
@@ -217,6 +251,7 @@ impl MenuSystem {
                 }
 
                 if input.is_just_pressed(Key::Escape) {
+                    self.pending_sfx.push(SfxEvent::MenuMove);
                     self.screen = MenuScreen::Main;
                 }
             }
@@ -234,24 +269,44 @@ impl MenuSystem {
                     } else {
                         self.settings_selected -= 1;
                     }
+                    self.pending_sfx.push(SfxEvent::MenuMove);
                 }
                 if input.is_just_pressed(Key::Down) {
                     self.settings_selected = (self.settings_selected + 1) % total_settings;
+                    self.pending_sfx.push(SfxEvent::MenuMove);
                 }
 
                 if input.is_just_pressed(Key::Left) {
                     if let Some(&item) = visible.get(self.settings_selected) {
                         self.activate_setting_prev(item);
+                        self.pending_sfx.push(if item == SettingItem::Back {
+                            SfxEvent::MenuConfirm
+                        } else {
+                            SfxEvent::MenuMove
+                        });
                     }
                 }
 
-                if input.is_just_pressed(Key::Right) || input.is_just_pressed(Key::Confirm) {
+                if input.is_just_pressed(Key::Right) {
                     if let Some(&item) = visible.get(self.settings_selected) {
-                        self.activate_setting_next(item);
+                        self.activate_setting_next(item, false);
+                        self.pending_sfx.push(if item == SettingItem::Back {
+                            SfxEvent::MenuConfirm
+                        } else {
+                            SfxEvent::MenuMove
+                        });
+                    }
+                }
+
+                if input.is_just_pressed(Key::Confirm) {
+                    if let Some(&item) = visible.get(self.settings_selected) {
+                        self.activate_setting_next(item, true);
+                        self.pending_sfx.push(SfxEvent::MenuConfirm);
                     }
                 }
 
                 if input.is_just_pressed(Key::Escape) {
+                    self.pending_sfx.push(SfxEvent::MenuMove);
                     self.screen = self.settings_return_screen;
                 }
             }
@@ -263,12 +318,15 @@ impl MenuSystem {
                     } else {
                         self.pause_selected -= 1;
                     }
+                    self.pending_sfx.push(SfxEvent::MenuMove);
                 }
                 if input.is_just_pressed(Key::Down) {
                     self.pause_selected = (self.pause_selected + 1) % 3;
+                    self.pending_sfx.push(SfxEvent::MenuMove);
                 }
 
                 if input.is_just_pressed(Key::Confirm) {
+                    self.pending_sfx.push(SfxEvent::MenuConfirm);
                     match self.pause_selected {
                         0 => {
                             self.request_resume_game = true;
@@ -287,6 +345,7 @@ impl MenuSystem {
                 }
 
                 if input.is_just_pressed(Key::Escape) {
+                    self.pending_sfx.push(SfxEvent::MenuMove);
                     self.request_resume_game = true;
                 }
             }
@@ -298,12 +357,15 @@ impl MenuSystem {
                     } else {
                         self.complete_selected -= 1;
                     }
+                    self.pending_sfx.push(SfxEvent::MenuMove);
                 }
                 if input.is_just_pressed(Key::Down) {
                     self.complete_selected = (self.complete_selected + 1) % 3;
+                    self.pending_sfx.push(SfxEvent::MenuMove);
                 }
 
                 if input.is_just_pressed(Key::Confirm) {
+                    self.pending_sfx.push(SfxEvent::MenuConfirm);
                     match self.complete_selected {
                         0 => self.request_restart_level = true,
                         1 => {
@@ -317,6 +379,7 @@ impl MenuSystem {
                 }
 
                 if input.is_just_pressed(Key::Escape) {
+                    self.pending_sfx.push(SfxEvent::MenuMove);
                     self.screen = MenuScreen::Main;
                 }
             }

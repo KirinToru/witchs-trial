@@ -1,4 +1,5 @@
 use glam::Vec2;
+use crate::engine::SfxEvent;
 use crate::physics::{
     AABB, PushableBox, BOX_DASH_IMPULSE_BEAST, BOX_DASH_IMPULSE_WITCH, PUSH_SPEED_MULT_BEAST,
     PUSH_SPEED_MULT_WITCH,
@@ -30,6 +31,7 @@ impl Player {
                 self.knockback_lock_timer = 0.15;
                 self.dash_timer = 0.0;
                 self.dash_freeze_timer = 0.0;
+                self.pending_sfx.push(SfxEvent::BeastHurt);
 
                 // Push away from velocity or facing direction
                 let knockback_dir = if self.vel.x.abs() > 10.0 {
@@ -42,6 +44,9 @@ impl Player {
                 self.grounded = false;
             }
             super::PlayerForm::Witch => {
+                if !self.dead {
+                    self.pending_sfx.push(SfxEvent::Death);
+                }
                 self.dead = true;
             }
         }
@@ -70,6 +75,9 @@ impl Player {
 
             // Check void before sub-step move (instant death)
             if self.check_hazard_collision(void_tiles) {
+                if !self.dead {
+                    self.pending_sfx.push(SfxEvent::Death);
+                }
                 self.dead = true;
                 break;
             }
@@ -92,6 +100,9 @@ impl Player {
 
             // Check void after sub-step move (instant death)
             if self.check_hazard_collision(void_tiles) {
+                if !self.dead {
+                    self.pending_sfx.push(SfxEvent::Death);
+                }
                 self.dead = true;
                 break;
             }
@@ -166,6 +177,7 @@ impl Player {
                 BOX_DASH_IMPULSE_WITCH
             };
             crates[hit_idx].vel.x = dir * impulse;
+            self.pending_sfx.push(SfxEvent::CrateDash);
 
             if dir > 0.0 {
                 self.pos.x = crates[hit_idx].pos.x - self.size.x;
