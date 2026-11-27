@@ -189,6 +189,8 @@ impl Player {
                 self.pos.x = crates[hit_idx].pos.x + crates[hit_idx].size.x;
             }
             self.vel.x = 0.0;
+            // Ensure zero residual crate or wall overlap after dash impact
+            self.separate_horizontal_crates(crates, solid_tiles);
             return;
         }
 
@@ -321,6 +323,71 @@ impl Player {
             }
             self.vel.x = 0.0;
         }
+
+        // Guarantee zero residual horizontal overlap with active crates and solid walls
+        self.separate_horizontal_crates(crates, solid_tiles);
+    }
+
+    //------------[Separate horizontal crate and wall overlaps]-------------------
+    fn separate_horizontal_crates(&mut self, crates: &[PushableBox], solid_tiles: &[AABB]) {
+        let mut player_box = self.aabb();
+
+        // Separate from every active crate overlapping horizontally (ignoring top landing edge)
+        for krate in crates {
+            if !krate.active {
+                continue;
+            }
+            let c_box = krate.aabb();
+            let vertical_overlap =
+                self.pos.y < c_box.max.y && self.pos.y + self.size.y > c_box.min.y + 2.0;
+            if vertical_overlap && player_box.overlaps(&c_box) {
+                self.push_out_horizontal_span(c_box.min.x, c_box.max.x, true);
+                player_box = self.aabb();
+            }
+        }
+
+        // Re-clamp against solid tiles so crate separation never embeds player into a wall
+        for wall in solid_tiles {
+            if player_box.overlaps(wall) {
+                self.push_out_horizontal_span(wall.min.x, wall.max.x, false);
+                player_box = self.aabb();
+            }
+        }
+    }
+
+    //------------[Push player out of horizontal span without ULP overlap]-------------------
+    fn push_out_horizontal_span(&mut self, min_x: f32, max_x: f32, only_zero_if_deep: bool) {
+        let player_center_x = self.pos.x + self.size.x * 0.5;
+        let span_center_x = (min_x + max_x) * 0.5;
+
+        if player_center_x < span_center_x {
+            let penetration = (self.pos.x + self.size.x) - min_x;
+            self.pos.x = min_x - self.size.x;
+            // Step down by at most a few ULPs so pos.x + size.x never exceeds min_x
+            for _ in 0..4 {
+                if self.pos.x + self.size.x <= min_x {
+                    break;
+                }
+                self.pos.x = self.pos.x.next_down();
+            }
+            // Keep push velocity on tiny f32 rounding nudges, stop deeper horizontal overlap
+            if (!only_zero_if_deep || penetration > 1e-3) && self.vel.x > 0.0 {
+                self.vel.x = 0.0;
+            }
+        } else {
+            let penetration = max_x - self.pos.x;
+            self.pos.x = max_x;
+            // Step up by at most a few ULPs so pos.x is never strictly below max_x
+            for _ in 0..4 {
+                if self.pos.x >= max_x {
+                    break;
+                }
+                self.pos.x = self.pos.x.next_up();
+            }
+            if (!only_zero_if_deep || penetration > 1e-3) && self.vel.x < 0.0 {
+                self.vel.x = 0.0;
+            }
+        }
     }
 
     //------------[Resolve vertical collision]-------------------
@@ -331,6 +398,9 @@ impl Player {
         crates: &[PushableBox],
     ) {
         let was_grounded = self.grounded;
+        // Record vertical bounds before moving to distinguish top/bottom contact from side contact
+        let prev_y = self.pos.y;
+        let prev_bottom = self.pos.y + self.size.y;
         self.pos.y += self.vel.y * dt;
         self.grounded = false;
         let mut player_box = self.aabb();
@@ -350,20 +420,41 @@ impl Player {
             }
         }
 
-        // 2. Active crates
+        // 2. Active crates (only land from above or bump head from below)
         for krate in crates {
             if !krate.active {
                 continue;
             }
             let crate_box = krate.aabb();
             if player_box.overlaps(&crate_box) {
-                if self.vel.y > 0.0 {
+                if self.vel.y > 0.0 && prev_bottom <= crate_box.min.y + 4.0 {
                     self.pos.y = crate_box.min.y - self.size.y;
                     self.vel.y = 0.0;
                     self.grounded = true;
-                } else if self.vel.y < 0.0 {
+                } else if self.vel.y < 0.0 && prev_y >= crate_box.max.y - 1.0 {
                     self.pos.y = crate_box.max.y;
                     self.vel.y = 0.0;
+                }
+                player_box = self.aabb();
+            }
+        }
+
+        // Re-clamp against solid tiles so crate resolution never pushes player into floor or ceiling
+        for wall in solid_tiles {
+            if player_box.overlaps(wall) {
+                let player_center_y = self.pos.y + self.size.y * 0.5;
+                let wall_center_y = (wall.min.y + wall.max.y) * 0.5;
+                if player_center_y < wall_center_y {
+                    self.pos.y = wall.min.y - self.size.y;
+                    if self.vel.y > 0.0 {
+                        self.vel.y = 0.0;
+                    }
+                    self.grounded = true;
+                } else {
+                    self.pos.y = wall.max.y;
+                    if self.vel.y < 0.0 {
+                        self.vel.y = 0.0;
+                    }
                 }
                 player_box = self.aabb();
             }
