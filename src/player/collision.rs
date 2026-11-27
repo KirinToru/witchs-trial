@@ -306,6 +306,10 @@ impl Player {
                         crates[c_idx].pos.x += allowed_disp;
                         crates[c_idx].vel.x = dir * max_push_speed;
                     }
+                    // Play crate push sound only when pushing actually moves the crate
+                    if allowed_disp.abs() > 0.01 {
+                        self.pending_sfx.push(SfxEvent::CratePush);
+                    }
                     if dir > 0.0 {
                         self.pos.x = crates[chain[0]].pos.x - self.size.x;
                     } else {

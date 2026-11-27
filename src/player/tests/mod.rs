@@ -31,3 +31,4 @@ mod test_high_fps_dynamic_idle_stability;
 mod test_player_audio_events_emitted;
 mod test_crate_dash_single_sfx_near_wall;
 mod test_box_push_and_jump_no_teleport;
+mod test_crate_push_sfx_emitted_only_when_moving;

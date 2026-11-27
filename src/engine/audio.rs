@@ -34,6 +34,7 @@ pub enum SfxEvent {
     Death,
     Checkpoint,
     CrateDash,
+    CratePush,
     LevelComplete,
     MenuMove,
     MenuConfirm,
@@ -50,6 +51,7 @@ impl SfxEvent {
         Self::Death,
         Self::Checkpoint,
         Self::CrateDash,
+        Self::CratePush,
         Self::LevelComplete,
         Self::MenuMove,
         Self::MenuConfirm,
@@ -67,6 +69,7 @@ impl SfxEvent {
             Self::Death => "death",
             Self::Checkpoint => "checkpoint",
             Self::CrateDash => "crate_dash",
+            Self::CratePush => "crate_push",
             Self::LevelComplete => "level_complete",
             Self::MenuMove => "menu_move",
             Self::MenuConfirm => "menu_confirm",
@@ -115,11 +118,26 @@ impl AudioSystem {
             // SFX prefers WAV first, then OGG
             if let Some(bytes) = Self::load_audio_bytes("assets/audio/sfx", stem, &["wav", "ogg"]) {
                 cache.insert(event, Arc::new(bytes));
+            } else if event == SfxEvent::CratePush {
+                // Allow CratePush to fall back to CrateDash bytes after loading all files
+                continue;
             } else {
                 log::warn!(
                     "Missing SFX asset for {:?}: expected assets/audio/sfx/{}.wav or .ogg",
                     event,
                     stem
+                );
+            }
+        }
+
+        // Reuse CrateDash audio for CratePush when no dedicated crate_push file exists
+        if !cache.contains_key(&SfxEvent::CratePush) {
+            if let Some(crate_dash_bytes) = cache.get(&SfxEvent::CrateDash) {
+                cache.insert(SfxEvent::CratePush, Arc::clone(crate_dash_bytes));
+            } else {
+                log::warn!(
+                    "Missing SFX asset for {:?}: expected assets/audio/sfx/crate_push.wav or .ogg",
+                    SfxEvent::CratePush
                 );
             }
         }
@@ -173,7 +191,6 @@ impl AudioSystem {
         if self.current_track == Some(track) {
             return;
         }
-        self.current_track = Some(track);
 
         // Stop any active previous track cleanly
         if let Some(old_player) = self.music_player.take() {
@@ -181,12 +198,14 @@ impl AudioSystem {
         }
 
         let Some(sink) = &self.sink else {
+            self.current_track = Some(track);
             return;
         };
 
         // Music prefers OGG first, then WAV
         let stem = track.file_stem();
         let Some(bytes) = Self::load_audio_bytes("assets/audio/music", stem, &["ogg", "wav"]) else {
+            self.current_track = None;
             log::warn!(
                 "Missing music asset for {:?}: expected assets/audio/music/{}.ogg or .wav",
                 track,
@@ -195,24 +214,23 @@ impl AudioSystem {
             return;
         };
 
-        let len = bytes.len() as u64;
         let cursor = Cursor::new(bytes);
-        match Decoder::builder()
-            .with_data(cursor)
-            .with_byte_len(len)
-            .with_seekable(true)
-            .build()
-        {
-            Ok(decoder) => {
-                let player = AudioPlayer::connect_new(sink.mixer());
+        // Decode as LoopedDecoder so Ogg Vorbis streams with empty initial frames still play and loop
+        match Decoder::new_looped(cursor) {
+            Ok(looped_decoder) => {
+                // Configure volume, pause state, and queued track before attaching to mixer
+                let (player, queue_rx) = AudioPlayer::new();
                 player.set_volume(self.music_volume);
                 if self.music_paused {
                     player.pause();
                 }
-                player.append(decoder.repeat_infinite());
+                player.append(looped_decoder);
+                sink.mixer().add(queue_rx);
                 self.music_player = Some(player);
+                self.current_track = Some(track);
             }
             Err(err) => {
+                self.current_track = None;
                 log::warn!("Failed to decode music asset for {:?}: {}", track, err);
             }
         }
@@ -241,6 +259,7 @@ impl AudioSystem {
 
         // Enforce per-event cooldown so repeated contacts never flood the audio mixer
         let min_cooldown = match event {
+            SfxEvent::CratePush => Duration::from_millis(280),
             SfxEvent::CrateDash | SfxEvent::Land => Duration::from_millis(120),
             _ => Duration::from_millis(60),
         };
