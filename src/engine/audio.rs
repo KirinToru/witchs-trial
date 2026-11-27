@@ -1,11 +1,11 @@
-//! Disk-based audio subsystem for looping music tracks and cached SFX playback.
+//! Embedded/disk-hybrid audio subsystem for looping music tracks and cached SFX playback.
 
 use std::collections::HashMap;
-use std::fs::File;
 use std::io::Cursor;
-use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player as AudioPlayer, Source};
+use crate::engine::assets;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MusicTrack {
@@ -88,6 +88,7 @@ pub struct AudioSystem {
     sink: Option<MixerDeviceSink>,
     music_player: Option<AudioPlayer>,
     sfx_cache: HashMap<SfxEvent, Arc<Vec<u8>>>,
+    last_sfx_played: HashMap<SfxEvent, Instant>,
     current_track: Option<MusicTrack>,
     music_paused: bool,
     music_volume: f32,
@@ -95,35 +96,28 @@ pub struct AudioSystem {
 }
 
 impl AudioSystem {
-    //------------[Find first existing audio file by extension priority]-------------------
-    fn resolve_audio_path(dir: &str, stem: &str, exts: &[&str]) -> Option<PathBuf> {
+    //------------[Load first existing audio bytes from disk or embedded assets]-------------------
+    fn load_audio_bytes(dir: &str, stem: &str, exts: &[&str]) -> Option<Vec<u8>> {
         for ext in exts {
-            let candidate = PathBuf::from(format!("{}/{}.{}", dir, stem, ext));
-            if candidate.is_file() {
-                return Some(candidate);
+            let candidate = format!("{}/{}.{}", dir, stem, ext);
+            if let Ok(bytes) = assets::load_bytes(&candidate) {
+                return Some(bytes);
             }
         }
         None
     }
 
-    //------------[Preload all SFX files from disk into memory cache]-------------------
+    //------------[Preload all SFX files into memory cache]-------------------
     fn load_sfx_cache() -> HashMap<SfxEvent, Arc<Vec<u8>>> {
         let mut cache = HashMap::new();
         for &event in SfxEvent::ALL {
             let stem = event.file_stem();
             // SFX prefers WAV first, then OGG
-            if let Some(path) = Self::resolve_audio_path("assets/audio/sfx", stem, &["wav", "ogg"]) {
-                match std::fs::read(&path) {
-                    Ok(bytes) => {
-                        cache.insert(event, Arc::new(bytes));
-                    }
-                    Err(err) => {
-                        log::warn!("Failed to read SFX file {}: {}", path.display(), err);
-                    }
-                }
+            if let Some(bytes) = Self::load_audio_bytes("assets/audio/sfx", stem, &["wav", "ogg"]) {
+                cache.insert(event, Arc::new(bytes));
             } else {
                 log::warn!(
-                    "Missing SFX file for {:?}: expected assets/audio/sfx/{}.wav or .ogg",
+                    "Missing SFX asset for {:?}: expected assets/audio/sfx/{}.wav or .ogg",
                     event,
                     stem
                 );
@@ -151,6 +145,7 @@ impl AudioSystem {
             sink,
             music_player: None,
             sfx_cache,
+            last_sfx_played: HashMap::new(),
             current_track: None,
             music_paused: false,
             music_volume: 0.7,
@@ -165,6 +160,7 @@ impl AudioSystem {
             sink: None,
             music_player: None,
             sfx_cache: HashMap::new(),
+            last_sfx_played: HashMap::new(),
             current_track: None,
             music_paused: false,
             music_volume: 0.7,
@@ -190,21 +186,23 @@ impl AudioSystem {
 
         // Music prefers OGG first, then WAV
         let stem = track.file_stem();
-        let Some(path) = Self::resolve_audio_path("assets/audio/music", stem, &["ogg", "wav"]) else {
+        let Some(bytes) = Self::load_audio_bytes("assets/audio/music", stem, &["ogg", "wav"]) else {
             log::warn!(
-                "Missing music file for {:?}: expected assets/audio/music/{}.ogg or .wav",
+                "Missing music asset for {:?}: expected assets/audio/music/{}.ogg or .wav",
                 track,
                 stem
             );
             return;
         };
 
-        let Ok(file) = File::open(&path) else {
-            log::warn!("Failed to open music file {}", path.display());
-            return;
-        };
-
-        match Decoder::try_from(file) {
+        let len = bytes.len() as u64;
+        let cursor = Cursor::new(bytes);
+        match Decoder::builder()
+            .with_data(cursor)
+            .with_byte_len(len)
+            .with_seekable(true)
+            .build()
+        {
             Ok(decoder) => {
                 let player = AudioPlayer::connect_new(sink.mixer());
                 player.set_volume(self.music_volume);
@@ -215,7 +213,7 @@ impl AudioSystem {
                 self.music_player = Some(player);
             }
             Err(err) => {
-                log::warn!("Failed to decode music file {}: {}", path.display(), err);
+                log::warn!("Failed to decode music asset for {:?}: {}", track, err);
             }
         }
     }
@@ -235,11 +233,24 @@ impl AudioSystem {
         }
     }
 
-    //------------[Play cached sound effect with current SFX volume]-------------------
-    pub fn play_sfx(&self, event: SfxEvent) {
+    //------------[Play cached sound effect with per-event cooldown and volume]-------------------
+    pub fn play_sfx(&mut self, event: SfxEvent) {
         if self.sfx_volume <= 0.0 {
             return;
         }
+
+        // Enforce per-event cooldown so repeated contacts never flood the audio mixer
+        let min_cooldown = match event {
+            SfxEvent::CrateDash | SfxEvent::Land => Duration::from_millis(120),
+            _ => Duration::from_millis(60),
+        };
+        let now = Instant::now();
+        if let Some(&last_time) = self.last_sfx_played.get(&event) {
+            if now.duration_since(last_time) < min_cooldown {
+                return;
+            }
+        }
+
         let Some(sink) = &self.sink else {
             return;
         };
@@ -247,9 +258,16 @@ impl AudioSystem {
             return;
         };
 
+        let len = bytes.len() as u64;
         let cursor = Cursor::new(SharedAudioBytes(Arc::clone(bytes)));
-        match Decoder::try_from(cursor) {
+        match Decoder::builder()
+            .with_data(cursor)
+            .with_byte_len(len)
+            .with_seekable(true)
+            .build()
+        {
             Ok(decoder) => {
+                self.last_sfx_played.insert(event, now);
                 sink.mixer().add(decoder.amplify(self.sfx_volume));
             }
             Err(err) => {

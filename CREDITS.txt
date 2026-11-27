@@ -1,0 +1,37 @@
+Witch's Trial - Asset Credits and Attributions
+=============================================
+
+All game assets are bundled into the standalone executable. Attribution for third-party audio assets used in this project:
+
+Music
+-----
+- assets/audio/music/menu.wav
+  "Nostalgia Loop 3 (Beneath the Stars) #2" by Dylan Kelk / SilverIllusionist
+  Source: Freesound - https://freesound.org/people/SilverIllusionist/sounds/882895/
+
+- assets/audio/music/level.ogg
+  "PS2 horror / mystery ambient theme" by Tarush Singhal
+  License: CC0 1.0 Universal
+  Source: OpenGameArt - https://opengameart.org/content/ps2-horror-mystery-ambient-theme
+
+Sound Effects (SFX)
+-------------------
+- assets/audio/sfx/jump.wav
+- assets/audio/sfx/wall_jump.wav
+- assets/audio/sfx/land.wav
+- assets/audio/sfx/dash.wav
+- assets/audio/sfx/beast_transform.wav
+- assets/audio/sfx/beast_hurt.wav
+- assets/audio/sfx/death.wav
+- assets/audio/sfx/checkpoint.wav
+- assets/audio/sfx/crate_dash.wav
+- assets/audio/sfx/menu_move.wav
+- assets/audio/sfx/menu_confirm.wav
+  From "12 Player Movement SFX" by leohpaz
+  License: CC-BY 4.0 / CC-BY 3.0
+  Source: OpenGameArt - https://opengameart.org/content/12-player-movement-sfx
+
+- assets/audio/sfx/level_complete.wav
+  "Heal" (#1) from "8 Heals and Buffs SFX" by leohpaz
+  License: CC-BY 4.0 / CC-BY 3.0
+  Source: OpenGameArt - https://opengameart.org/content/8-heals-and-buffs-sfx

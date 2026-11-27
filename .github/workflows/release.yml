@@ -60,7 +60,8 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path staging -Force
           Copy-Item target/release/witchs-trial.exe staging/
-          Copy-Item -Recurse assets staging/
+          Copy-Item LICENSE staging/
+          Copy-Item CREDITS.txt staging/
           Compress-Archive -Path staging/* -DestinationPath ${{ matrix.artifact_name }}
           Get-FileHash -Path ${{ matrix.artifact_name }} -Algorithm SHA256 | Out-File -FilePath "${{ matrix.artifact_name }}.sha256"
 
@@ -69,7 +70,8 @@ jobs:
         run: |
           mkdir -p staging
           cp target/release/witchs-trial staging/
-          cp -r assets staging/
+          cp LICENSE staging/
+          cp CREDITS.txt staging/
           tar -czf ${{ matrix.artifact_name }} -C staging .
           shasum -a 256 ${{ matrix.artifact_name }} > ${{ matrix.artifact_name }}.sha256
 
@@ -101,14 +103,15 @@ jobs:
           files: artifacts/**/*
           generate_release_notes: true
           body: |
-            # Witch's Trial v0.4.1
+            # Witch's Trial v0.4.2
 
             Automated multi-platform binary release built with wgpu and winit in Rust.
 
-            ## What's New Since v0.4.0
-            - **Window Mode Persistence:** Applied saved Borderless and Exclusive Fullscreen modes automatically on startup with monitor fallback handling and swapchain resize sync; persisted F4 quick-toggle changes to `settings.cfg` and prevented fullscreen dimensions from overwriting saved Windowed size.
-            - **High-FPS Dynamic Idle & Grounding Stability:** Replaced the inactive `vel.y == 0.0` floor check with a 0.5 px downward ground probe across solid floors, crates, and one-way platforms to eliminate `f32` precision flicker at very high framerates (e.g., 3000+ FPS with VSync off and Dynamic timestep).
-            - **Animation Timing & Tests:** Reset player animation timer/frame on state transitions with real-time `while`-loop accumulation; expanded the headless unit test suite to 53 passing tests.
+            ## What's New Since v0.4.1
+            - **Audio Subsystem & Volume Controls:** Added disk-and-embedded audio playback via `rodio 0.23.0` (`wav`/`vorbis`), looping menu/level music with pause handling, 12 gameplay/UI SFX triggers, independent `Music Volume` and `SFX Volume` (0-100%) settings in `settings.cfg`, and `CREDITS.txt`.
+            - **Crate Dash Audio Spam Fix:** Added a single-trigger-per-dash guard in `Player` when dashing into wall-blocked crates, backed by per-event cooldowns in `AudioSystem`.
+            - **Single Standalone Executable:** Embedded the entire `assets/` tree into the binary via `include_dir` (hybrid disk-override + embedded fallback) across Windows, Linux, and macOS, with `settings.cfg` persisted beside the executable.
+            - **Tests:** Expanded the headless unit test suite to 58 passing tests.
 
             ## Architecture Overview
             - Pure platformer precision physics with sub-stepped AABB collision detection (8 px threshold).
@@ -116,6 +119,8 @@ jobs:
             - Dual-form player kinematics and Finite State Machine (Idle, Walk, Jump, Fall, WallSlide, DashFreeze, Dash) with The Beast transformation and damage i-frames.
             - Pushable crates (PushableBox) with 2D sub-stepped physics, chain pushing, and friction-based slide deceleration.
             - Classic PSX post-processing shader with 15-bit RGB555 quantization, 4x4 ordered Bayer dithering, soft scanlines, and corner vignette.
+            - Audio subsystem built on `rodio 0.23.0` (`wav`/`vorbis`) supporting looping music, in-memory cached SFX with cooldowns, and silent headless fallback.
+            - Single standalone binary packaging via `include_dir` embedding all `assets/` with optional disk overrides and executable-adjacent `settings.cfg`.
             - Multi-backend rendering via wgpu (Vulkan, DirectX 12, Metal, OpenGL).
             - Deterministic fixed-timestep loop (30Hz-300Hz) and Dynamic mode with sub-frame interpolation.
 

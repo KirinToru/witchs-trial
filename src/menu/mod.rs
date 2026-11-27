@@ -34,29 +34,9 @@ pub struct MenuSystem {
 }
 
 impl MenuSystem {
-    //------------[Scan available map files]-------------------
+    //------------[Scan available map files from disk and embedded bundle]-------------------
     pub fn refresh_maps(&mut self) {
-        let mut maps = Vec::new();
-        let maps_dir = std::path::Path::new("assets/maps");
-        if let Ok(entries) = std::fs::read_dir(maps_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_file() {
-                    if let Some(ext) = path.extension() {
-                        if ext.to_string_lossy().eq_ignore_ascii_case("tmx") {
-                            if let Some(filename) = path.file_name() {
-                                maps.push(filename.to_string_lossy().to_string());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        maps.sort();
-        if maps.is_empty() && std::path::Path::new("assets/maps/test.tmx").exists() {
-            maps.push("test.tmx".to_string());
-        }
-        self.available_maps = maps;
+        self.available_maps = crate::engine::assets::list_maps();
         let total_items = self.available_maps.len() + 1;
         if self.map_selected >= total_items {
             self.map_selected = 0;

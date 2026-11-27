@@ -353,10 +353,29 @@ impl GameSettings {
         )
     }
 
+    //------------[Resolve configuration path beside executable]-------------------
+    pub fn settings_file_path() -> std::path::PathBuf {
+        // Keep unit tests isolated to local working directory
+        #[cfg(test)]
+        {
+            std::path::PathBuf::from("settings.cfg")
+        }
+        #[cfg(not(test))]
+        {
+            if let Ok(exe_path) = std::env::current_exe() {
+                if let Some(dir) = exe_path.parent() {
+                    return dir.join("settings.cfg");
+                }
+            }
+            std::path::PathBuf::from("settings.cfg")
+        }
+    }
+
     //------------[Load settings or use defaults]-------------------
     pub fn load_or_default() -> Self {
         let mut settings = Self::default();
-        if let Ok(content) = std::fs::read_to_string("settings.cfg") {
+        let path = Self::settings_file_path();
+        if let Ok(content) = std::fs::read_to_string(path) {
             settings.parse_from_str(&content);
         }
         settings
@@ -364,7 +383,7 @@ impl GameSettings {
 
     //------------[Save settings to file]-------------------
     pub fn save(&self) {
-        let _ = std::fs::write("settings.cfg", self.to_config_string());
+        let _ = std::fs::write(Self::settings_file_path(), self.to_config_string());
     }
 }
 

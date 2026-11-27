@@ -54,4 +54,8 @@ The in-game Settings menu allows adjusting:
 - **Timestep Mode**: Dynamic or fixed tick rates (30 Hz to 300 Hz) with sub-frame interpolation.
 - **Auto Bunny Hop**: Automatically buffers continuous jumps when holding Space.
 - **PSX Shader**: Toggles the classic PlayStation 1 post-processing effect featuring 15-bit color quantization, 4x4 ordered Bayer dithering, soft scanlines, and subtle corner vignette (zero GPU overhead when disabled).
+- **Music Volume**: Adjusts background music volume from 0% to 100% in 10% increments (default 70%; pauses automatically during Pause).
+- **SFX Volume**: Adjusts gameplay and menu sound effect volume from 0% to 100% in 10% increments (default 80%).
 - **Graphics Backend**: Auto, Vulkan, DirectX 12, Metal, OpenGL (applies on game restart).
+
+All settings persist automatically to `settings.cfg` next to the executable.

@@ -1,6 +1,6 @@
 [package]
 name = "witchs-trial"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 
 [dependencies]
@@ -13,4 +13,5 @@ image = { version = "0.25.10", default-features = false, features = ["png"] }
 log = "0.4.34"
 env_logger = "0.11.11"
 rodio = { version = "0.23.0", default-features = false, features = ["playback", "wav", "vorbis"] }
+include_dir = "0.7.4"
 

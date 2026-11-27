@@ -67,13 +67,13 @@ pub struct TmxMap {
 }
 
 impl TmxMap {
-    //------------[Load TMX map from file]-------------------
+    //------------[Load TMX map from file or embedded bundle]-------------------
     pub fn load_from_file<P: AsRef<Path>>(
         path: P,
         renderer: &WgpuRenderer,
     ) -> Result<Self, String> {
-        let content = std::fs::read_to_string(&path)
-            .map_err(|e| format!("Failed to read TMX file {}: {}", path.as_ref().display(), e))?;
+        let path_str = path.as_ref().to_string_lossy();
+        let content = crate::engine::assets::load_string(&path_str)?;
 
         let width = extract_attribute(&content, "width")
             .and_then(|s| s.parse::<u32>().ok())

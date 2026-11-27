@@ -15,15 +15,15 @@ pub struct Texture {
 }
 
 impl Texture {
-    //------------[Load texture from file]-------------------
+    //------------[Load texture from file or embedded bundle]-------------------
     pub fn from_file<P: AsRef<Path>>(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         path: P,
         layout: &wgpu::BindGroupLayout,
     ) -> Result<Self, String> {
-        let bytes = std::fs::read(&path)
-            .map_err(|e| format!("Failed to read file {}: {}", path.as_ref().display(), e))?;
+        let path_str = path.as_ref().to_string_lossy();
+        let bytes = crate::engine::assets::load_bytes(&path_str)?;
         Self::from_bytes(device, queue, &bytes, layout)
     }
 

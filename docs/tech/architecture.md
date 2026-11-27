@@ -50,10 +50,12 @@ The engine is structured into six modular subsystems:
 1. `engine`:
    - `WgpuRenderer`: Hardware-accelerated 2D quad and textured sprite batch renderer built on `wgpu`.
    - `PsxUniforms` & `psx_post.wgsl`: Fullscreen post-processing pass applying authentic 15-bit RGB555 color quantization, 4x4 ordered Bayer dithering, soft scanlines, and subtle corner vignette over the rendered world and menu. Bypassed completely when disabled.
-   - `InputState`: Bitmask-driven keyboard and mouse state tracking single-frame edges and continuous presses.
-   - `TimeAccumulator`: Fixed-timestep accumulator ensuring deterministic physics simulation at configurable frequencies.
+   - `AudioSystem`: Disk-and-embedded audio engine built on `rodio 0.23.0` (`wav`/`vorbis`), streaming looping music (`Menu`, `Level`) with pause control, caching 12 `SfxEvent` cues in memory with per-event cooldowns, and falling back silently when no audio hardware is present.
+   - `assets`: Hybrid resource loader powered by `include_dir`, embedding the entire `assets/` tree into the binary while checking disk overrides relative to CWD and executable location first.
+   - `InputState`: Bitmask-driven keyboard state tracking single-frame edges and continuous presses.
+   - `TimeAccumulator`: Fixed-timestep accumulator ensuring deterministic physics simulation at configurable frequencies (and safely resetting in Menu, Pause, and Dynamic mode).
    - `FrameLimiter`: Precision sleep and busy-spin frame rate limiter matching monitor refresh rate or custom FPS caps.
-   - `Texture`: GPU texture resource loader and bind group manager.
+   - `Texture`: GPU texture resource loader and bind group manager using `assets::load_bytes`.
    - `DebugFont`: Built-in bitmap font generator for diagnostic overlays and HUD telemetry.
 
 2. `game`:
@@ -72,15 +74,15 @@ The engine is structured into six modular subsystems:
    - `PushableBox`: 2D physics entity with gravity, terminal velocity, ground friction (500.0 px/s^2), ice friction (110.0 px/s^2), sub-stepping, wall collisions, chain pushing, and realistic slide deceleration.
 
 5. `map`:
-   - Custom XML parser for Tiled TMX map files and TSX tilesets using `roxmltree`.
+   - Custom XML/CSV parser for Tiled TMX map files loaded via `assets::load_string`.
    - Dynamic tileset resolution mapping arbitrary GIDs to texture UV atlas coordinates.
    - Horizontal collider merging algorithm combining adjacent solid tiles, platforms, and ice surfaces into consolidated AABB bars.
    - Decodes tile rotation flags (horizontal flip, vertical flip, diagonal flip) and transforms rotated spike hitboxes.
 
 6. `menu`:
-   - Keyboard and mouse driven UI supporting Main, Map Select, Settings, Pause, and Level Complete screens.
-   - Handles real-time adjustments of window mode, VSync, target FPS lock, timestep simulation modes, auto-bhop toggles, and PSX post-processing shader.
-   - Persistent settings storage via `settings.cfg`.
+   - Keyboard-driven UI supporting Main, Map Select, Settings, Pause, and Level Complete screens.
+   - Handles real-time adjustments of window mode, VSync, target FPS lock, timestep simulation modes, auto-bhop toggles, PSX post-processing shader, Music/SFX volume sliders, and GPU backend selection.
+   - Persistent settings storage via `settings.cfg` resolved alongside the executable (`settings_file_path()`).
 
 ---
 
@@ -137,4 +139,4 @@ To build and open the interactive documentation in your default browser:
 cargo doc --document-private-items --no-deps --open
 ```
 
-The generated documentation is located at `target/doc/witchs_trial/index.html` and provides full-text search, type signatures, trait implementations, and direct source code links.
+The generated documentation is located at `target/doc/witchs_trial/index.html` and provides full-text search, type signatures, trait implementations, and direct source code links. The standalone project passes 58 headless unit tests across all subsystems.

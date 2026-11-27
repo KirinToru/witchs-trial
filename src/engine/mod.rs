@@ -1,5 +1,6 @@
 //! Engine subsystem providing hardware rendering, input handling, and timing primitives.
 
+pub mod assets;
 pub mod audio;
 pub mod debug_font;
 pub mod input;

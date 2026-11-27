@@ -61,6 +61,7 @@ pub struct Player {
     pub jump_buffer_timer: f32,
     pub wall_jump_buffer_timer: f32,
     pub dash_buffer_timer: f32,
+    pub(crate) dash_crate_sfx_played: bool,
     pub jumps_count: u32,
     pub dashes_count: u32,
     pub bhop_velocity: f32,
@@ -108,6 +109,7 @@ impl Player {
             jump_buffer_timer: 0.0,
             wall_jump_buffer_timer: 0.0,
             dash_buffer_timer: 0.0,
+            dash_crate_sfx_played: false,
             jumps_count: 0,
             dashes_count: 0,
             bhop_velocity: 0.0,
@@ -165,6 +167,7 @@ impl Player {
         self.bhop_velocity = 0.0;
         self.bhop_timer = 0.0;
         self.is_bhopping = false;
+        self.dash_crate_sfx_played = false;
         self.pending_sfx.clear();
         self.anim_timer = 0.0;
         self.anim_frame = 0;
@@ -352,6 +355,8 @@ impl Player {
             self.can_dash = false;
             self.dash_cooldown = 0.45;
             self.dashes_count += 1;
+            // Allow CrateDash SFX once for this new dash
+            self.dash_crate_sfx_played = false;
             self.pending_sfx.push(SfxEvent::Dash);
         }
 

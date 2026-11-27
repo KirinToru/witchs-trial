@@ -177,7 +177,11 @@ impl Player {
                 BOX_DASH_IMPULSE_WITCH
             };
             crates[hit_idx].vel.x = dir * impulse;
-            self.pending_sfx.push(SfxEvent::CrateDash);
+            // Emit crate dash sound only once per dash even if crate is pressed against a wall
+            if !self.dash_crate_sfx_played {
+                self.pending_sfx.push(SfxEvent::CrateDash);
+                self.dash_crate_sfx_played = true;
+            }
 
             if dir > 0.0 {
                 self.pos.x = crates[hit_idx].pos.x - self.size.x;

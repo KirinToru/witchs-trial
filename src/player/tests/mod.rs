@@ -29,3 +29,4 @@ mod test_box_dash_impulse_and_slide;
 mod test_box_push_release_slide_deceleration;
 mod test_high_fps_dynamic_idle_stability;
 mod test_player_audio_events_emitted;
+mod test_crate_dash_single_sfx_near_wall;
