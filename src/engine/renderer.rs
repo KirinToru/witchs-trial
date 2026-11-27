@@ -180,6 +180,12 @@ pub struct WgpuRenderer {
     pub debug_font_texture: Texture,
     active_camera_pos: Vec2,
     active_viewport_size: Vec2,
+    uploaded_viewport_size: Option<Vec2>,
+}
+
+//------------[Check whether camera uniform upload is required]-------------------
+pub(crate) fn should_upload_camera_uniform(uploaded: Option<Vec2>, current: Vec2) -> bool {
+    uploaded != Some(current)
 }
 
 impl WgpuRenderer {
@@ -576,65 +582,88 @@ impl WgpuRenderer {
             debug_font_texture,
             active_camera_pos: Vec2::ZERO,
             active_viewport_size: Vec2::new(width as f32, height as f32),
+            uploaded_viewport_size: None,
             supported_present_modes: surface_caps.present_modes,
+        }
+    }
+
+    //------------[Reconfigure swapchain and PSX offscreen targets]-------------------
+    pub fn reconfigure_surface(&mut self) {
+        let current_size = self.window.inner_size();
+        if current_size.width == 0 || current_size.height == 0 {
+            return;
+        }
+
+        let size_changed = current_size.width != self.surface_config.width
+            || current_size.height != self.surface_config.height;
+
+        if size_changed {
+            self.resize(current_size);
+        } else {
+            self.surface.configure(&self.device, &self.surface_config);
         }
     }
 
     //------------[Resize surface swapchain and offscreen buffers]-------------------
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
+            let size_changed = new_size.width != self.surface_config.width
+                || new_size.height != self.surface_config.height;
+
             self.surface_config.width = new_size.width;
             self.surface_config.height = new_size.height;
             self.surface.configure(&self.device, &self.surface_config);
 
-            // Rebuild offscreen render target and bind group
-            let offscreen_texture = self.device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("offscreen_scene_texture"),
-                size: wgpu::Extent3d {
-                    width: new_size.width,
-                    height: new_size.height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: self.surface_config.format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
-            });
-            self.offscreen_view = offscreen_texture.create_view(&wgpu::TextureViewDescriptor::default());
+            // Rebuild offscreen PSX resources and upload uniforms only when resolution changes
+            if size_changed {
+                let offscreen_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("offscreen_scene_texture"),
+                    size: wgpu::Extent3d {
+                        width: new_size.width,
+                        height: new_size.height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: self.surface_config.format,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                    view_formats: &[],
+                });
+                self.offscreen_view = offscreen_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-            self.psx_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("psx_bind_group"),
-                layout: &self.psx_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: self.psx_uniform_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&self.offscreen_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::Sampler(&self.offscreen_sampler),
-                    },
-                ],
-            });
+                self.psx_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("psx_bind_group"),
+                    layout: &self.psx_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: self.psx_uniform_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::TextureView(&self.offscreen_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::Sampler(&self.offscreen_sampler),
+                        },
+                    ],
+                });
 
-            // Update PSX uniforms for new window resolution
-            let virtual_scale = (new_size.height as f32 / 360.0).floor().max(1.0);
-            let uniforms = PsxUniforms {
-                resolution: [new_size.width as f32, new_size.height as f32],
-                virtual_scale,
-                _pad: 0.0,
-            };
-            self.queue.write_buffer(
-                &self.psx_uniform_buffer,
-                0,
-                bytemuck::cast_slice(&[uniforms]),
-            );
+                // Update PSX uniforms for new window resolution
+                let virtual_scale = (new_size.height as f32 / 360.0).floor().max(1.0);
+                let uniforms = PsxUniforms {
+                    resolution: [new_size.width as f32, new_size.height as f32],
+                    virtual_scale,
+                    _pad: 0.0,
+                };
+                self.queue.write_buffer(
+                    &self.psx_uniform_buffer,
+                    0,
+                    bytemuck::cast_slice(&[uniforms]),
+                );
+            }
         }
     }
 
@@ -660,8 +689,10 @@ impl WgpuRenderer {
                 wgpu::PresentMode::AutoNoVsync
             }
         };
-        self.surface_config.present_mode = mode;
-        self.surface.configure(&self.device, &self.surface_config);
+        if self.surface_config.present_mode != mode {
+            self.surface_config.present_mode = mode;
+            self.surface.configure(&self.device, &self.surface_config);
+        }
     }
 
     //------------[Update camera matrix]-------------------
@@ -669,21 +700,25 @@ impl WgpuRenderer {
         self.active_camera_pos = camera_pos;
         self.active_viewport_size = viewport_size;
 
-        let right = viewport_size.x;
-        let bottom = viewport_size.y;
+        // Upload projection matrix only when viewport size changes because camera_pos is applied on CPU
+        if should_upload_camera_uniform(self.uploaded_viewport_size, viewport_size) {
+            let right = viewport_size.x;
+            let bottom = viewport_size.y;
 
-        let view_proj = [
-            2.0 / right, 0.0, 0.0, 0.0,
-            0.0, -2.0 / bottom, 0.0, 0.0,
-            0.0, 0.0, 1.0, 0.0,
-            -1.0, 1.0, 0.0, 1.0,
-        ];
+            let view_proj = [
+                2.0 / right, 0.0, 0.0, 0.0,
+                0.0, -2.0 / bottom, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                -1.0, 1.0, 0.0, 1.0,
+            ];
 
-        self.queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[CameraUniform { view_proj }]),
-        );
+            self.queue.write_buffer(
+                &self.camera_buffer,
+                0,
+                bytemuck::cast_slice(&[CameraUniform { view_proj }]),
+            );
+            self.uploaded_viewport_size = Some(viewport_size);
+        }
     }
 
     //------------[Push quad vertices and extend batch]-------------------
@@ -902,11 +937,22 @@ impl WgpuRenderer {
     }
 
     //------------[End frame and submit to GPU]-------------------
-    pub fn end_frame(&mut self) {
-        let output = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(tex)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(tex) => tex,
-            _ => return,
+    pub fn end_frame(&mut self) -> bool {
+        // Acquire swapchain frame BEFORE writing vertex staging buffers
+        let (output, suboptimal) = match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(tex) => (tex, false),
+            wgpu::CurrentSurfaceTexture::Suboptimal(tex) => (tex, true),
+            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                self.reconfigure_surface();
+                let _ = self.device.poll(wgpu::PollType::Poll);
+                return false;
+            }
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Occluded
+            | wgpu::CurrentSurfaceTexture::Validation => {
+                let _ = self.device.poll(wgpu::PollType::Poll);
+                return false;
+            }
         };
         let swapchain_view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -1126,5 +1172,13 @@ impl WgpuRenderer {
 
         self.queue.submit(std::iter::once(encoder.finish()));
         self.queue.present(output);
+
+        // Reconfigure swapchain if surface reported suboptimal presentation
+        if suboptimal {
+            self.reconfigure_surface();
+        }
+        // Poll device without blocking so completed staging buffers are freed right away
+        let _ = self.device.poll(wgpu::PollType::Poll);
+        true
     }
 }

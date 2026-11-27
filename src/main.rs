@@ -274,6 +274,16 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 if let (Some(renderer), Some(game)) = (&mut self.renderer, &self.game) {
+                    // Skip frame encoding and yield briefly if window is minimized or zero-sized
+                    let win_size = renderer.window.inner_size();
+                    if win_size.width == 0
+                        || win_size.height == 0
+                        || renderer.window.is_minimized() == Some(true)
+                    {
+                        std::thread::sleep(std::time::Duration::from_millis(8));
+                        return;
+                    }
+
                     renderer.begin_frame();
 
                     // In fixed timestep mode use accumulator alpha, in dynamic mode use 1.0
@@ -304,7 +314,10 @@ impl ApplicationHandler for App {
                         }
                     }
 
-                    renderer.end_frame();
+                    // Yield briefly when frame presentation is skipped to avoid spin-looping under ControlFlow::Poll
+                    if !renderer.end_frame() {
+                        std::thread::sleep(std::time::Duration::from_millis(4));
+                    }
                 }
             }
             _ => {}

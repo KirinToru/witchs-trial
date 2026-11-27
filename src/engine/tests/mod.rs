@@ -1,3 +1,4 @@
 mod test_time_accumulator_reset;
 mod test_embedded_assets_available;
 mod test_music_tracks_decode;
+mod test_camera_uniform_upload_skip;

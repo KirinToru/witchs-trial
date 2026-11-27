@@ -523,13 +523,14 @@ impl Game {
 
     //------------[Render UI overlays and diagnostic HUD without PSX post-processing]-------------------
     pub fn render_ui(&self, renderer: &mut WgpuRenderer, alpha: f32) {
+        // Exit immediately when debug HUD is off to avoid redundant camera uniform uploads
+        if !self.debug_mode {
+            return;
+        }
+
         let interp_camera = self.prev_camera_pos.lerp(self.camera_pos, alpha);
         renderer.set_camera(interp_camera, self.viewport_size);
-
-        // Debug overlays
-        if self.debug_mode {
-            self.render_debug_overlay(renderer, interp_camera, alpha);
-        }
+        self.render_debug_overlay(renderer, interp_camera, alpha);
     }
 
     //------------[Render debug overlays and diagnostic HUD]-------------------
