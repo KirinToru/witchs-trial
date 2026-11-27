@@ -424,6 +424,12 @@ impl ApplicationHandler for App {
                 self.input.clear_frame_edges();
             }
             AppState::Playing => {
+                let note_open = self
+                    .game
+                    .as_ref()
+                    .map(|g| g.is_note_open())
+                    .unwrap_or(false);
+
                 // Check level completion
                 let level_just_finished = self
                     .game
@@ -448,7 +454,7 @@ impl ApplicationHandler for App {
                     self.audio.play_music(MusicTrack::Menu);
                     self.time.reset_accumulator();
                     self.input.clear_frame_edges();
-                } else if self.input.is_just_pressed(Key::Escape) {
+                } else if self.input.is_just_pressed(Key::Escape) && !note_open {
                     // Open pause menu, pause level music, and clear pending physics backlog
                     self.state = AppState::Menu;
                     self.menu.screen = crate::menu::MenuScreen::Pause;
@@ -467,27 +473,23 @@ impl ApplicationHandler for App {
                         game.step_hz = current_hz.unwrap_or(0.0);
                     }
 
-                    match self.menu.settings.timestep_mode {
-                        crate::menu::TimestepMode::Dynamic => {
-                            // Clear fixed-timestep accumulator so Dynamic mode never builds backlog
-                            self.time.reset_accumulator();
-                            // Variable timestep step
-                            let dt = frame_duration.min(0.05);
-                            if let Some(game) = &mut self.game {
-                                game.update(dt, &self.input);
-                                for sfx in game.player.pending_sfx.drain(..) {
-                                    self.audio.play_sfx(sfx);
-                                }
+                    if note_open {
+                        // Freeze fixed-timestep backlog and process note closing regardless of accumulator
+                        self.time.reset_accumulator();
+                        if let Some(game) = &mut self.game {
+                            game.update(0.0, &self.input);
+                            for sfx in game.player.pending_sfx.drain(..) {
+                                self.audio.play_sfx(sfx);
                             }
-                            self.input.clear_frame_edges();
                         }
-                        mode => {
-                            // Fixed timestep loop
-                            if let Some(hz) = mode.hz() {
-                                self.time.set_hz(hz);
-                            }
-                            let dt = self.time.dt();
-                            while self.time.step() {
+                        self.input.clear_frame_edges();
+                    } else {
+                        match self.menu.settings.timestep_mode {
+                            crate::menu::TimestepMode::Dynamic => {
+                                // Clear fixed-timestep accumulator so Dynamic mode never builds backlog
+                                self.time.reset_accumulator();
+                                // Variable timestep step
+                                let dt = frame_duration.min(0.05);
                                 if let Some(game) = &mut self.game {
                                     game.update(dt, &self.input);
                                     for sfx in game.player.pending_sfx.drain(..) {
@@ -495,6 +497,28 @@ impl ApplicationHandler for App {
                                     }
                                 }
                                 self.input.clear_frame_edges();
+                            }
+                            mode => {
+                                // Fixed timestep loop
+                                if let Some(hz) = mode.hz() {
+                                    self.time.set_hz(hz);
+                                }
+                                let dt = self.time.dt();
+                                while self.time.step() {
+                                    if let Some(game) = &mut self.game {
+                                        game.update(dt, &self.input);
+                                        for sfx in game.player.pending_sfx.drain(..) {
+                                            self.audio.play_sfx(sfx);
+                                        }
+                                        // Stop extra fixed steps right away if opening a note paused simulation
+                                        if game.is_note_open() {
+                                            self.time.reset_accumulator();
+                                            self.input.clear_frame_edges();
+                                            break;
+                                        }
+                                    }
+                                    self.input.clear_frame_edges();
+                                }
                             }
                         }
                     }

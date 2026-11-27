@@ -31,9 +31,23 @@ pub struct Game {
     pub auto_bhop: bool,
     pub r_hold_reset_done: bool,
     death_counted: bool,
+    pub active_note: Option<usize>,
+    pub nearby_note: Option<usize>,
+    pub note_paper_texture: Option<Texture>,
 }
 
 impl Game {
+    //------------[Load optional background texture for note panel if present]-------------------
+    fn load_optional_note_texture(renderer: &WgpuRenderer) -> Option<Texture> {
+        Texture::from_file(
+            &renderer.device,
+            &renderer.queue,
+            "assets/ui/note_paper.png",
+            &renderer.texture_bind_group_layout,
+        )
+        .ok()
+    }
+
     //------------[Create game instance]-------------------
     pub fn new(map_path: &str, renderer: &WgpuRenderer) -> Result<Self, String> {
         let map = TmxMap::load_from_file(map_path, renderer)?;
@@ -44,6 +58,7 @@ impl Game {
             "assets/backgrounds/bg.png",
             &renderer.texture_bind_group_layout,
         )?;
+        let note_paper_texture = Self::load_optional_note_texture(renderer);
 
         // 640x360 virtual viewport (2x scale on 1280x720)
         let viewport_size = Vec2::new(640.0, 360.0);
@@ -73,9 +88,40 @@ impl Game {
             auto_bhop: true,
             r_hold_reset_done: false,
             death_counted: false,
+            active_note: None,
+            nearby_note: None,
+            note_paper_texture,
         };
         game.snap_camera_to_player();
         Ok(game)
+    }
+
+    //------------[Check whether a note panel is currently open]-------------------
+    pub fn is_note_open(&self) -> bool {
+        self.active_note.is_some()
+    }
+
+    //------------[Find closest note within interaction range of player]-------------------
+    fn find_nearby_note(&self) -> Option<usize> {
+        let player_center = self.player.pos + self.player.size * 0.5;
+        let mut best: Option<(usize, f32)> = None;
+        for (idx, note) in self.map.notes.iter().enumerate() {
+            let note_center = note.pos + note.size * 0.5;
+            let dist = player_center.distance(note_center);
+            if dist <= 36.0 && best.is_none_or(|(_, best_dist)| dist < best_dist) {
+                best = Some((idx, dist));
+            }
+        }
+        best.map(|(idx, _)| idx)
+    }
+
+    //------------[Sync previous positions to current ones while frozen on note]-------------------
+    fn freeze_previous_positions(&mut self) {
+        self.prev_camera_pos = self.camera_pos;
+        self.player.prev_pos = self.player.pos;
+        for krate in &mut self.crates {
+            krate.prev_pos = krate.pos;
+        }
     }
 
     //------------[Center camera on player]-------------------
@@ -108,11 +154,14 @@ impl Game {
         self.level_finished = false;
         self.r_hold_reset_done = false;
         self.death_counted = false;
+        self.active_note = None;
+        self.nearby_note = None;
     }
 
     //------------[Load map]-------------------
     pub fn change_map(&mut self, map_path: &str, renderer: &WgpuRenderer) -> Result<(), String> {
         self.map = TmxMap::load_from_file(map_path, renderer)?;
+        self.note_paper_texture = Self::load_optional_note_texture(renderer);
         self.crates = self
             .map
             .crate_spawns
@@ -137,6 +186,8 @@ impl Game {
         }
         self.snap_camera_to_player();
         self.death_counted = false;
+        self.active_note = None;
+        self.nearby_note = None;
     }
 
     //------------[Update FPS telemetry]-------------------
@@ -156,6 +207,37 @@ impl Game {
         // F3 debug overlay toggle
         if input.is_just_pressed(Key::ToggleDebug) {
             self.debug_mode = !self.debug_mode;
+        }
+
+        // Pause gameplay completely while reading a note and wait for close key
+        if self.active_note.is_some() {
+            self.freeze_previous_positions();
+            if input.is_just_pressed(Key::Interact)
+                || input.is_just_pressed(Key::Confirm)
+                || input.is_just_pressed(Key::Escape)
+            {
+                self.active_note = None;
+                self.player.pending_sfx.push(SfxEvent::NoteOpen);
+            }
+            return;
+        }
+
+        // Track nearest readable note and open it before player movement or interactions
+        let can_interact = !self.player.dead && self.fade_alpha < 0.95 && !self.level_finished;
+        self.nearby_note = if can_interact {
+            self.find_nearby_note()
+        } else {
+            None
+        };
+
+        if can_interact && input.is_just_pressed(Key::Interact) {
+            if let Some(idx) = self.nearby_note {
+                self.active_note = Some(idx);
+                self.player.vel = Vec2::ZERO;
+                self.freeze_previous_positions();
+                self.player.pending_sfx.push(SfxEvent::NoteOpen);
+                return;
+            }
         }
 
         // Level timer
@@ -310,6 +392,133 @@ impl Game {
                 [0.0, 0.0, 0.0, self.fade_alpha],
             );
         }
+
+        // Draw [W] world prompt above the nearest readable note when no note is open
+        if self.active_note.is_none() {
+            if let Some(idx) = self.nearby_note {
+                if let Some(note) = self.map.notes.get(idx) {
+                    let label = "[W]";
+                    let scale = 0.75;
+                    let text_w = label.len() as f32 * 8.0 * scale;
+                    let text_h = 8.0 * scale;
+                    let pad_x = 4.0;
+                    let pad_y = 3.0;
+                    let badge_size = Vec2::new(text_w + pad_x * 2.0, text_h + pad_y * 2.0);
+                    let badge_pos = Vec2::new(
+                        note.pos.x + (note.size.x - badge_size.x) * 0.5,
+                        note.pos.y - badge_size.y - 4.0,
+                    );
+                    renderer.draw_debug_box(
+                        badge_pos,
+                        badge_size,
+                        [0.06, 0.06, 0.10, 0.88],
+                        [0.75, 0.75, 0.85, 0.90],
+                    );
+                    renderer.draw_debug_text(
+                        label,
+                        badge_pos + Vec2::new(pad_x, pad_y),
+                        [0.96, 0.96, 1.0, 1.0],
+                        scale,
+                    );
+                }
+            }
+        }
+
+        // Draw full-screen darkened panel when reading a note
+        if let Some(idx) = self.active_note {
+            if let Some(note) = self.map.notes.get(idx) {
+                self.render_note_overlay(renderer, note);
+            }
+        }
+    }
+
+    //------------[Render centered note panel overlay with pause-style dimming]-------------------
+    fn render_note_overlay(&self, renderer: &mut WgpuRenderer, note: &crate::map::NoteObject) {
+        renderer.set_camera(Vec2::ZERO, self.viewport_size);
+        // Darken background identically to MenuScreen::Pause
+        renderer.draw_quad(Vec2::ZERO, self.viewport_size, [0.0, 0.0, 0.0, 0.65]);
+
+        let panel_w = 420.0;
+        let panel_h = 240.0;
+        let panel_pos = Vec2::new(
+            (self.viewport_size.x - panel_w) * 0.5,
+            (self.viewport_size.y - panel_h) * 0.5,
+        );
+
+        // Use optional paper texture if present, otherwise draw simple dark box
+        let (text_color, title_color, footer_color) = if let Some(tex) = &self.note_paper_texture {
+            renderer.draw_sprite(panel_pos, Vec2::new(panel_w, panel_h), tex);
+            (
+                [0.12, 0.10, 0.08, 1.0],
+                [0.24, 0.12, 0.05, 1.0],
+                [0.28, 0.22, 0.18, 0.90],
+            )
+        } else {
+            renderer.draw_debug_box(
+                panel_pos,
+                Vec2::new(panel_w, panel_h),
+                [0.07, 0.07, 0.10, 0.94],
+                [0.42, 0.42, 0.52, 0.90],
+            );
+            (
+                [0.92, 0.92, 0.96, 1.0],
+                [0.95, 0.85, 0.55, 1.0],
+                [0.65, 0.65, 0.75, 0.85],
+            )
+        };
+
+        let pad_x = 24.0;
+        let usable_w = panel_w - pad_x * 2.0;
+
+        let title_trimmed = note.title.trim();
+        let body_start_y = if !title_trimmed.is_empty() {
+            let title_scale = 1.1;
+            let max_title_chars = (usable_w / (8.0 * title_scale)).floor().max(1.0) as usize;
+            let display_title: String = title_trimmed.chars().take(max_title_chars).collect();
+            let title_w = display_title.chars().count() as f32 * 8.0 * title_scale;
+            let title_x = panel_pos.x + (panel_w - title_w) * 0.5;
+            renderer.draw_debug_text(
+                &display_title,
+                Vec2::new(title_x, panel_pos.y + 18.0),
+                title_color,
+                title_scale,
+            );
+            panel_pos.y + 42.0
+        } else {
+            panel_pos.y + 22.0
+        };
+
+        let footer = "[W / SPACE / ESC] CLOSE";
+        let footer_scale = 0.8;
+        let footer_w = footer.len() as f32 * 8.0 * footer_scale;
+        let footer_y = panel_pos.y + panel_h - 20.0;
+        renderer.draw_debug_text(
+            footer,
+            Vec2::new(panel_pos.x + (panel_w - footer_w) * 0.5, footer_y),
+            footer_color,
+            footer_scale,
+        );
+
+        let body_scale = 0.9;
+        let line_step = 13.0;
+        let max_chars = (usable_w / (8.0 * body_scale)).floor().max(1.0) as usize;
+        let max_lines = ((footer_y - 12.0 - body_start_y) / line_step)
+            .floor()
+            .max(1.0) as usize;
+
+        let wrapped = crate::map::wrap_note_text(&note.text, max_chars);
+        for (i, line) in wrapped.into_iter().take(max_lines).enumerate() {
+            if line.is_empty() {
+                continue;
+            }
+            let line_y = body_start_y + i as f32 * line_step;
+            renderer.draw_debug_text(
+                &line,
+                Vec2::new(panel_pos.x + pad_x, line_y),
+                text_color,
+                body_scale,
+            );
+        }
     }
 
     //------------[Render UI overlays and diagnostic HUD without PSX post-processing]-------------------
@@ -386,6 +595,19 @@ impl Game {
                     spike.max - spike.min,
                     [0.95, 0.40, 0.05, 0.30],
                     [1.00, 0.55, 0.10, 0.90],
+                );
+            }
+        }
+
+        // Note interaction zones (violet)
+        for note in &self.map.notes {
+            let n_box = crate::physics::AABB::from_pos_size(note.pos, note.size);
+            if view_box.overlaps(&n_box) {
+                renderer.draw_debug_box(
+                    note.pos,
+                    note.size,
+                    [0.75, 0.40, 0.95, 0.18],
+                    [0.88, 0.58, 1.00, 0.85],
                 );
             }
         }

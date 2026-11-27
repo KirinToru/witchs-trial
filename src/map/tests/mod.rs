@@ -5,3 +5,5 @@ mod test_extract_all_layers;
 mod test_merge_horizontal_colliders_contiguous;
 mod test_merge_horizontal_colliders_gaps_and_rows;
 mod test_ice_collider_merging;
+mod test_parse_tmx_note_objects;
+mod test_note_text_wrapping;

@@ -39,6 +39,7 @@ pub struct TilesetMapping {
     pub rows: f32,
 }
 
+#[derive(Debug, Clone)]
 pub struct TileVisual {
     pub pos: Vec2,
     pub rot_deg: f32,
@@ -46,6 +47,15 @@ pub struct TileVisual {
     pub uv_min: Vec2,
     pub uv_max: Vec2,
     pub tileset: TilesetKind,
+}
+
+#[derive(Debug, Clone)]
+pub struct NoteObject {
+    pub pos: Vec2,
+    pub size: Vec2,
+    pub title: String,
+    pub text: String,
+    pub visual: Option<TileVisual>,
 }
 
 pub struct TmxMap {
@@ -61,6 +71,7 @@ pub struct TmxMap {
     pub spike_colliders: Vec<AABB>,
     pub crate_spawns: Vec<Vec2>,
     pub interactives: Vec<InteractiveTile>,
+    pub notes: Vec<NoteObject>,
     pub bricks_texture: Texture,
     pub prototype_texture: Texture,
     pub main_texture: Texture,
@@ -207,6 +218,9 @@ impl TmxMap {
         let one_way_platforms = merge_horizontal_colliders(&one_way_tile_coords, tile_size);
         let ice_colliders = merge_horizontal_colliders(&ice_tile_coords, tile_size);
 
+        // Parse interactive note and instruction objects from TMX object groups
+        let notes = extract_note_objects(&content, tile_size, &tileset_mappings);
+
         // Fallback spawn check in object groups
         if interactives.iter().all(|i| i.kind != InteractiveKind::SpawnPoint) {
             if let Some(obj_spawn) = extract_object_spawn(&content) {
@@ -263,10 +277,20 @@ impl TmxMap {
             spike_colliders,
             crate_spawns,
             interactives,
+            notes,
             bricks_texture,
             prototype_texture,
             main_texture,
         })
+    }
+
+    //------------[Resolve tileset texture reference]-------------------
+    fn tileset_texture(&self, kind: TilesetKind) -> &Texture {
+        match kind {
+            TilesetKind::Bricks => &self.bricks_texture,
+            TilesetKind::Prototype => &self.prototype_texture,
+            TilesetKind::Main => &self.main_texture,
+        }
     }
 
     //------------[Render visible map tiles]-------------------
@@ -285,10 +309,11 @@ impl TmxMap {
 
             let tile_box = AABB::from_pos_size(tile.pos, tile_vec);
             if view_box.overlaps(&tile_box) {
-                let (tex, tint) = match tile.tileset {
-                    TilesetKind::Bricks => (&self.bricks_texture, [1.0, 1.0, 1.0, 1.0]),
-                    TilesetKind::Prototype => (&self.prototype_texture, [1.0, 1.0, 1.0, 1.0]),
-                    TilesetKind::Main => (&self.main_texture, [1.0, 1.0, 1.0, 0.85]),
+                let tex = self.tileset_texture(tile.tileset);
+                let tint = if tile.tileset == TilesetKind::Main {
+                    [1.0, 1.0, 1.0, 0.85]
+                } else {
+                    [1.0, 1.0, 1.0, 1.0]
                 };
                 renderer.draw_texture_rect_rotated(
                     tile.pos,
@@ -301,6 +326,27 @@ impl TmxMap {
                     &tex.bind_group,
                     tint,
                 );
+            }
+        }
+
+        // Render tile visuals placed via Tiled note objects
+        for note in &self.notes {
+            if let Some(visual) = &note.visual {
+                let note_box = AABB::from_pos_size(note.pos, note.size);
+                if view_box.overlaps(&note_box) {
+                    let tex = self.tileset_texture(visual.tileset);
+                    renderer.draw_texture_rect_rotated(
+                        note.pos,
+                        note.size,
+                        visual.rot_deg,
+                        visual.scale,
+                        visual.uv_min,
+                        visual.uv_max,
+                        tex.id,
+                        &tex.bind_group,
+                        [1.0, 1.0, 1.0, 1.0],
+                    );
+                }
             }
         }
 

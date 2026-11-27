@@ -35,6 +35,7 @@ pub enum SfxEvent {
     Checkpoint,
     CrateDash,
     CratePush,
+    NoteOpen,
     LevelComplete,
     MenuMove,
     MenuConfirm,
@@ -52,6 +53,7 @@ impl SfxEvent {
         Self::Checkpoint,
         Self::CrateDash,
         Self::CratePush,
+        Self::NoteOpen,
         Self::LevelComplete,
         Self::MenuMove,
         Self::MenuConfirm,
@@ -70,6 +72,7 @@ impl SfxEvent {
             Self::Checkpoint => "checkpoint",
             Self::CrateDash => "crate_dash",
             Self::CratePush => "crate_push",
+            Self::NoteOpen => "note_open",
             Self::LevelComplete => "level_complete",
             Self::MenuMove => "menu_move",
             Self::MenuConfirm => "menu_confirm",
@@ -99,6 +102,26 @@ pub struct AudioSystem {
 }
 
 impl AudioSystem {
+    //------------[Reuse fallback SFX bytes when dedicated file is missing]-------------------
+    fn apply_sfx_fallback(
+        cache: &mut HashMap<SfxEvent, Arc<Vec<u8>>>,
+        target: SfxEvent,
+        fallback: SfxEvent,
+    ) {
+        if cache.contains_key(&target) {
+            return;
+        }
+        if let Some(bytes) = cache.get(&fallback) {
+            cache.insert(target, Arc::clone(bytes));
+        } else {
+            log::warn!(
+                "Missing SFX asset for {:?}: expected assets/audio/sfx/{}.wav or .ogg",
+                target,
+                target.file_stem()
+            );
+        }
+    }
+
     //------------[Load first existing audio bytes from disk or embedded assets]-------------------
     fn load_audio_bytes(dir: &str, stem: &str, exts: &[&str]) -> Option<Vec<u8>> {
         for ext in exts {
@@ -118,8 +141,8 @@ impl AudioSystem {
             // SFX prefers WAV first, then OGG
             if let Some(bytes) = Self::load_audio_bytes("assets/audio/sfx", stem, &["wav", "ogg"]) {
                 cache.insert(event, Arc::new(bytes));
-            } else if event == SfxEvent::CratePush {
-                // Allow CratePush to fall back to CrateDash bytes after loading all files
+            } else if matches!(event, SfxEvent::CratePush | SfxEvent::NoteOpen) {
+                // Allow CratePush and NoteOpen to use cached fallback SFX after loop
                 continue;
             } else {
                 log::warn!(
@@ -130,17 +153,8 @@ impl AudioSystem {
             }
         }
 
-        // Reuse CrateDash audio for CratePush when no dedicated crate_push file exists
-        if !cache.contains_key(&SfxEvent::CratePush) {
-            if let Some(crate_dash_bytes) = cache.get(&SfxEvent::CrateDash) {
-                cache.insert(SfxEvent::CratePush, Arc::clone(crate_dash_bytes));
-            } else {
-                log::warn!(
-                    "Missing SFX asset for {:?}: expected assets/audio/sfx/crate_push.wav or .ogg",
-                    SfxEvent::CratePush
-                );
-            }
-        }
+        Self::apply_sfx_fallback(&mut cache, SfxEvent::CratePush, SfxEvent::CrateDash);
+        Self::apply_sfx_fallback(&mut cache, SfxEvent::NoteOpen, SfxEvent::MenuConfirm);
         cache
     }
 
